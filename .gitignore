@@ -1,0 +1,21 @@
+# OS
+.DS_Store
+
+# Editors
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Build artifacts
+*.o
+*.so
+
+# MP-SPDZ (if cloned as subdir)
+MP-SPDZ/
