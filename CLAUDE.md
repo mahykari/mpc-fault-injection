@@ -17,7 +17,7 @@ Clone command (from repo root):
 git clone https://github.com/data61/MP-SPDZ.git
 ```
 
-`notes/mp-spdz-exploration.md` has the canonical list of places to look (Protocols/, Processor/, Compiler/, Math/, OT/, FHE/) and ready-to-run `grep` recipes for MAC checks, opening, sacrificing, and truncation. **Start there** before doing your own codebase sweep — the user has already thought through what matters.
+`notes/mp-spdz.md` has the architecture map (with the EXEC↔PROTO injection seam called out), the canonical anchor files, and ready-to-run `grep` recipes for MAC checks, opening, sacrificing, and truncation. **Start there** before doing your own codebase sweep — the user has already thought through what matters.
 
 ## The mental model driving every task
 
