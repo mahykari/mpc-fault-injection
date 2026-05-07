@@ -158,22 +158,24 @@ mutate at register access (`Procp.get_S()[reg]` in
 `Processor.hpp`) to cover arithmetic opcodes and memory-value
 faults.
 
-## Fault operator catalog (two axes)
+## Fault operator catalog
 
-The operator space splits along two orthogonal dimensions.
-Per-instruction operators mirror Arguzz; sequencing operators
-are MPC-specific because checks are deferred and batched (zkVM
+Three layers. Axes A and B are orthogonal; within axis A,
+sub-axes A1 and A2 are complementary. Sequencing operators are
+MPC-specific because checks are deferred and batched (zkVM
 constraints are universal-per-transition; MPC checks are
 selective-per-batch).
 
-### Axis A — instruction semantics (Arguzz import)
+### Axis A — value mutations
 
-Per-PC mutations. Each is expressible as a wire-level deviation
-by the corrupt party.
+Two sub-axes depending on granularity.
 
-1. **Corrupt operand at OPEN** — wire-level: send wrong share
-   contribution. Highest-priority operator; this is the
-   canonical attack.
+#### A1 — per-instruction operators (Arguzz import)
+
+Per-PC mutations; each is expressible as a wire-level deviation.
+
+1. **Corrupt operand at OPEN** — send wrong share contribution.
+   Highest-priority; this is the canonical attack.
 2. **Corrupt $\gamma_i$** — leave share intact, mutate MAC
    contribution. SPDZ-family only. Probes $(x_i, \gamma_i)$
    pairing across code paths.
@@ -183,7 +185,39 @@ by the corrupt party.
 5. **Replace opcode** — ADDS↔SUBS, MULS→ADDS, etc. Tests whether
    downstream checks notice the substitution.
 6. **Corrupt stored share post-STMS** — write through state to a
-   value that gets opened later.
+   value opened later.
+
+#### A2 — gadget insertion (primary mechanism)
+
+Insert an arbitrary block of **local-only instructions** between
+any two sync-points (MULS / OPEN / CHECK boundaries). The gadget
+runs only on the corrupt party; honest parties see no extra
+network traffic, so sync is preserved by construction.
+
+Local-only opcode whitelist (no `Player` calls): ADDS, SUBS,
+ADDSI, SUBSI, MULSI, MOVS, LDMS, STMS, clear arithmetic,
+JMP, JMPNZ. Forbidden in gadgets: MULS, OPEN, INPUT, CHECK,
+TRUNC_PR, DABIT, EDABIT.
+
+Gadget templates:
+- **Single-variable bump** — $s \leftarrow s + c$ for constant
+  $c$. Degenerate; likely hits Wall 2 (MAC catches it).
+- **Linear combination** — $s \leftarrow s + a \cdot t + b \cdot
+  u$ for shares $t, u$ already in registers. Mixes secrets
+  before opening.
+- **Permute** — $s \leftrightarrow t$. Swaps two shares
+  mid-computation; tests whether MAC checks are value-bound
+  or position-bound.
+- **Drift-and-restore** — $s \leftarrow s + \delta$, then
+  $s \leftarrow s - \delta$. Net effect zero; exercises the
+  accumulator window between the two opcodes.
+- **Zero-and-recompute** — $s \leftarrow 0$; recompute $s$ from
+  other registers. Tests whether the derived value propagates
+  the corruption.
+
+This is the "malicious party doing more work between sync points"
+idea: the corrupt party executes extra locally-computed
+operations that alter share state before it is opened.
 
 ### Axis B — sequencing (MPC-specific)
 
