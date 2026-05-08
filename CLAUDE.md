@@ -6,15 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Research repo exploring **fault injection for malicious-secure MPC protocols**. The MPC analogue of ARGUZZ (which fault-injects zkVM provers). Motivation and framing live in `README.md`; do not restate them, build on them.
 
-The project is in the **reading + scoping phase**. There is no build system, no test suite, and no production code. `exploration/` is currently empty except for a placeholder. Do not invent commands, fabricate tests, or scaffold infrastructure until the user asks — expect early sessions to be reading MP-SPDZ source, writing small probes, and editing notes.
+The project has a **scaffold-with-stubs**. `BLUEPRINT.md` is the design source of truth. `pyproject.toml` configures uv + `mypy --strict`. `pipeline/` holds the typed pipeline components (Generator, Translator, Compiler, Injector, Executor, Oracle, Reporter) — all stubs at scaffold time, replaced one at a time. `main.py` runs the pipeline end-to-end. The invariants — `uv run python main.py` always works, `uv run mypy` always green — are load-bearing; see `BLUEPRINT.md` § "Development invariants".
 
 ## Primary target: MP-SPDZ
 
-MP-SPDZ (https://github.com/data61/MP-SPDZ) is the main SUT. It lives at `./MP-SPDZ/` as a **plain clone** and is **gitignored** (see `.gitignore`) — deliberately not a submodule. Assume `./MP-SPDZ/` may or may not exist on a given checkout; check before grepping it.
+MP-SPDZ (https://github.com/data61/MP-SPDZ) is the main SUT. It lives at `./MP-SPDZ/`, gitignored (see `.gitignore`). What's in there is the **pre-built binary distribution** (v0.4.2 tarball from GitHub Releases), *not* a source clone — building from source on Ubuntu 26.04 fails on a Boost 1.90 / `libOTe` ASIO incompatibility. The binaries are statically linked and live under `MP-SPDZ/bin/Linux-amd64/` (`mascot-party.x`, `semi-party.x`, `spdz2k-party.x`, ...). The `Compiler/` Python module is also present — that's what we import for IR-level fault injection.
 
-Clone command (from repo root):
+Re-fetch (from repo root):
 ```bash
-git clone https://github.com/data61/MP-SPDZ.git
+curl -L -o /tmp/mp-spdz.tar.xz https://github.com/data61/MP-SPDZ/releases/download/v0.4.2/mp-spdz-0.4.2.tar.xz
+tar -xJf /tmp/mp-spdz.tar.xz && mv mp-spdz-0.4.2 MP-SPDZ
 ```
 
 `notes/mp-spdz.md` has the architecture map (with the EXEC↔PROTO injection seam called out), the canonical anchor files, and ready-to-run `grep` recipes for MAC checks, opening, sacrificing, and truncation. **Start there** before doing your own codebase sweep — the user has already thought through what matters.
@@ -23,23 +24,24 @@ git clone https://github.com/data61/MP-SPDZ.git
 
 The attack surface is the **delta between semi-honest and malicious protocols** in MP-SPDZ. Per the project README, Semi/Semi2k = MASCOT/SPDZ2k with these stripped out: amplifying, sacrificing, MAC generation, OT correlation checks. That stripped set IS the fault-injection target — anywhere malicious-only code runs, ask "what if a corrupt party skips, corrupts, or races this step?"
 
-Methodology is the MPC port of **Arguzz** (arXiv 2509.10819): mutate instruction semantics at the bytecode-dispatch layer on one corrupt party; check whether the protocol's malicious-security mechanisms detect it. Oracles:
+Methodology is the MPC port of **Arguzz** (arXiv 2509.10819): mutate the program at the compiler-IR layer on the corrupt parties; check whether the protocol's malicious-security mechanisms detect the deviation. Oracles:
 - **Soundness bug** = deviation produces wrong output silently (no abort). This is what we hunt.
 - **Completeness** = honest run succeeds. Already covered by BabelFuzz; not our focus.
 - **Fairness** = all-or-nothing output delivery.
 
-Ground truth for real bugs: "Rushing at SPDZ" (ePrint 2025/789) — missing MAC checks (notably in truncation), thread races around opening. When judging whether an injection point is interesting, cross-reference that paper's attacks.
+Ground truth for real bugs: "Rushing at SPDZ" (ePrint 2025/789) — missing MAC checks (notably in truncation), thread races around opening. Useful as a reference for what historical bugs *look like*; the current gadget injector won't directly reproduce them (those are skip-CHECK-class, not gadget-class), but they motivate the harness.
 
-## Design decisions locked in round 1
+## Design decisions
 
-These are in `notes/fault-injection-design.md`; don't re-derive them:
+`BLUEPRINT.md` is the source of truth. Summary so future-you doesn't reopen settled questions:
 
-- **Injection layer = VM bytecode dispatch**, not the protocol abstraction. Primary patch site: `Processor/Instruction.hpp:1530` (opcode switch in `Program::execute_with_errors`). Secondary shim at register access for macro-expanded opcodes. MP-SPDZ bytecode is protocol-agnostic, so one injector covers all malicious protocols.
-- **Oracle = twin-run with pinned randomness.** Baseline vs mutated, diff outputs, classify exceptions. `mac_fail`/`consistency_check_fail` = caught (no bug); silent divergence = soundness bug; crash = triage.
-- **Synchronisation invariant:** mutate *values*, not *calls* — round counts and message volumes must match across parties. Never skip MULS/OPEN; OK to skip CHECK/TRUNC_PR/local arithmetic.
-- **Propagation filter:** backward def-use slice from OPEN/CHECK/PRIVATEOUTPUT — only mutate PCs in the slice.
-- **Party-role coverage** is a harness concern, not injector concern. Symmetric families (SPDZ, SPDZ2k, MASCOT, MaliciousShamir) need one party index; role-asymmetric families (Rep3, Astra, Trio, Dealer, Rep4) need iteration across distinct roles. Table in the design note.
-- **First concrete target:** reproduce the Rushing-at-SPDZ truncation bug via "skip CHECK around TRUNC_PR" — if the harness catches it, the design works.
+- **Injection layer = MP-SPDZ compiler IR** (`Compiler.program.Program`), not raw bytecode and not source strings. Mutate the IR after compile, before execution. One mutated IR per run.
+- **Scope = gadget insertion only.** Splice a local-only block of arithmetic between two consecutive sync points on each corrupt party's tape. Operators that touch MAC tags or skip/move CHECKs are out of scope here; they need a different substrate.
+- **Oracle = twin-run.** Baseline (all honest) vs mutated, diff outputs. `mac_fail` / `consistency_check_fail` = caught; silent divergence = soundness bug; crash / timeout = inconclusive.
+- **Synchronisation invariant** is preserved by the gadget whitelist: gadget bodies use only local-only opcodes (no `Player::` calls), so honest parties see no extra network traffic.
+- **Threat model = within-threshold corrupt-set sampling.** For each `(protocol, n)`, the harness samples non-empty `S ⊆ {0..n-1}` with `|S| ≤ t`. Combinatorial growth in `|S|` is the workload of a fuzzer, not a constraint to design around.
+- **Same mutation across corrupt parties** for now — every party in `S` loads the same mutated `.bc`. Per-party variation and coordinated collusion are future work.
+- **First concrete target = plumbing milestone.** Compile a hand-written program; run `mascot-party.x × 2` from Python (`n=2`, `t=1`, `S={1}`); capture stdout. No injection yet — confirm we can drive MP-SPDZ end-to-end.
 
 ## Subagents
 
@@ -53,6 +55,11 @@ These are in `notes/fault-injection-design.md`; don't re-derive them:
 
 ## Directory intent
 
-- `notes/` — reading notes, protocol analysis, design thinking. Markdown only.
+- `BLUEPRINT.md` — design source of truth (architecture, components, threat model, working-dir layout).
+- `pipeline/` — typed pipeline components (Generator, Translator, Compiler, Injector, Executor, Oracle, Reporter). Stubs replaced one at a time; `mypy --strict` enforced.
+- `main.py` — pipeline entrypoint. `uv run python main.py` must always work.
+- `runs/<id>/` — per-run artifacts (honest + mutated `.bc`, per-party stdout/stderr, `injection.json`, `report.json`). Gitignored.
+- `notes/` — reading notes, protocol analysis. Markdown only. (`mp-spdz.md` = MP-SPDZ architecture map; `reading-list.md` = papers triaged by relevance.)
 - `exploration/` — scratch code for poking at MP-SPDZ. Expect ad-hoc scripts, not a library.
-- `MP-SPDZ/` — gitignored clone of the SUT when present.
+- `MP-SPDZ/` — gitignored binary distribution v0.4.2.
+- `python-circil/` — gitignored clone of the input-program generator.

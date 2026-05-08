@@ -12,6 +12,7 @@
 __pycache__/
 *.pyc
 .venv/
+.mypy_cache/
 
 # Build artifacts
 *.o
@@ -19,3 +20,6 @@ __pycache__/
 
 # MP-SPDZ (if cloned as subdir)
 MP-SPDZ/
+
+# python-circil (if cloned as subdir)
+python-circil/
