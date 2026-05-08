@@ -1,0 +1,22 @@
+[project]
+name = "mpc-fault-injection"
+version = "0.0.1"
+description = "Fault injection harness for malicious-secure MPC protocols (MP-SPDZ)."
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+files = ["pipeline", "main.py"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[tool.uv]
+package = false
