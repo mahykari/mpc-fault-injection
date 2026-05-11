@@ -14,7 +14,7 @@ from pipeline.types import RunResult, Verdict
 
 
 def judge(result: RunResult) -> Verdict:
-  print(f"[oracle] STUB: would classify {result.program_id} run")
+  print("[oracle] STUB: classify twin-run")
   honest_output = result.honest_run[0].stdout if result.honest_run else ""
   actual_output = result.mutated_run[0].stdout if result.mutated_run else ""
   return Verdict(

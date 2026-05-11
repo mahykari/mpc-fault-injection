@@ -1,8 +1,8 @@
-"""Boundary types for the fault-injection pipeline.
+"""Boundary types between pipeline components.
 
-Every component takes one of these in and produces one out.
-mypy --strict enforces the contract; the pipeline itself is
-the integration test (per BLUEPRINT.md invariants).
+These carry content and results between stages. Identity (`program_id`,
+`protocol`, party counts, corrupt set) lives on `Config`, not on
+these dataclasses — see rule #3 in CLAUDE.md / memory.
 """
 from __future__ import annotations
 
@@ -20,35 +20,32 @@ class Seed:
 
 @dataclass(frozen=True)
 class CircilProgram:
-  program_id: str
   source: str  # CircIL textual representation
 
 
 @dataclass(frozen=True)
 class MpspdzSource:
-  program_id: str
   source: str  # MP-SPDZ Python DSL
 
 
 @dataclass(frozen=True)
 class MpspdzProgram:
-  """Opaque handle to a compiled MP-SPDZ program.
+  """Marker that compilation succeeded.
 
-  `ir_handle` will hold an MP-SPDZ `Compiler.program.Program` instance
-  once the Compiler stub is replaced. Stub: None.
+  Empty for the plumbing milestone — the artifacts live on disk under
+  `Config.honest_dir`. Will carry a reference to the in-memory
+  `Compiler.program.Program` once the Injector mutates IR directly.
   """
-  program_id: str
-  ir_handle: object | None = None
 
 
 @dataclass(frozen=True)
 class InjectionRecord:
-  gadget_kind: str          # one of: drift_and_restore | single_variable_bump | ...
+  gadget_kind: str
   tape_index: int
-  sync_lo_pc: int           # last sync-point PC before the gadget
-  sync_hi_pc: int           # first sync-point PC after the gadget
+  sync_lo_pc: int
+  sync_hi_pc: int
   party_id: int
-  details: str              # human-readable gadget parameters
+  details: str
 
 
 @dataclass(frozen=True)
@@ -68,10 +65,6 @@ class PartyOutput:
 
 @dataclass(frozen=True)
 class RunResult:
-  program_id: str
-  protocol: Protocol
-  n_parties: int
-  malicious_party: int
   honest_run: tuple[PartyOutput, ...]
   mutated_run: tuple[PartyOutput, ...]
   duration_ms: int
@@ -88,10 +81,6 @@ class Verdict:
 
 @dataclass(frozen=True)
 class Report:
-  program_id: str
-  protocol: Protocol
-  n_parties: int
-  malicious_party: int
   fault: InjectionRecord
   verdict: Verdict
   duration_ms: int

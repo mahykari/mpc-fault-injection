@@ -23,3 +23,6 @@ MP-SPDZ/
 
 # python-circil (if cloned as subdir)
 python-circil/
+
+# Per-run artifacts (.bc/.sch, party stdout/stderr, report.json)
+runs/

@@ -1,63 +1,63 @@
-"""Stub: MP-SPDZ Executor.
+"""Executor: launch the honest and mutated twins.
 
-Real impl plan (per BLUEPRINT.md):
-  1. Materialize original IR → runs/<id>/honest/Programs/Bytecode/*.bc
-                              → runs/<id>/honest/Programs/Schedules/*.sch
-  2. Materialize mutated IR  → runs/<id>/mutated/Programs/...
-  3. Launch n × MP-SPDZ/bin/Linux-amd64/mascot-party.x twice
-     (honest twin: all parties read from honest/;
-      mutated twin: malicious_party reads from mutated/, others from honest/).
-  4. Hard timeout (default 30s); collect each party's stdout/stderr/exit code.
+Honest twin: every party reads from `honest/`.
+Mutated twin: the corrupt party reads from `mutated/`; others read
+from `honest/`. Per-party cwd lists are derived on `Config`.
 
-Binary path: MP-SPDZ/bin/Linux-amd64/<protocol>-party.x (statically
-linked, from the v0.4.2 binary distribution).
-
-For now: pretend honest and mutated runs both produced "result: 3".
+For the plumbing milestone the Injector is a passthrough, so
+`mutated/Programs/` is a byte-for-byte mirror of `honest/Programs/`.
+The mirror step goes away when the Injector emits its own bytecode.
 """
 from __future__ import annotations
 
-import time
+import shutil
+from pathlib import Path
 
-from pipeline.types import (
-  MutatedProgram,
-  PartyOutput,
-  Protocol,
-  RunResult,
-)
+from pipeline.config import NeedsExecutor
+from pipeline.mpspdz import MpSpdzPartyBinary, TwinRunPlan
+from pipeline.timing import Timer
+from pipeline.types import MutatedProgram, RunResult
 
 
-def execute(
-  mutated: MutatedProgram,
-  protocol: Protocol,
-  n_parties: int,
-  malicious_party: int,
-  timeout_s: float = 30.0,
-) -> RunResult:
-  program_id = mutated.original.program_id
-  print(
-    f"[executor] STUB: would launch {n_parties}× {protocol}-party.x for "
-    f"{program_id} (twin-run, malicious party {malicious_party})"
-  )
-  print(
-    f"[executor] STUB: would materialize honest+mutated to runs/<id>/"
-  )
-  start = time.monotonic()
-  fake_out = "result: 3"
-  honest = tuple(
-    PartyOutput(party_id=i, stdout=fake_out, stderr="", exit_code=0)
-    for i in range(n_parties)
-  )
-  mutated_run = tuple(
-    PartyOutput(party_id=i, stdout=fake_out, stderr="", exit_code=0)
-    for i in range(n_parties)
-  )
-  return RunResult(
-    program_id=program_id,
-    protocol=protocol,
-    n_parties=n_parties,
-    malicious_party=malicious_party,
-    honest_run=honest,
-    mutated_run=mutated_run,
-    duration_ms=int((time.monotonic() - start) * 1000),
-    timed_out=False,
-  )
+class Executor:
+  def __init__(
+    self, party_binary: MpSpdzPartyBinary, config: NeedsExecutor,
+  ) -> None:
+    self._party_binary = party_binary
+    self._config = config
+
+  def execute(self, mutated: MutatedProgram) -> RunResult:
+    print(
+      f"[executor] {self._config.program_id}: twin-run "
+      f"(gadget={mutated.record.gadget_kind}, "
+      f"corrupt party={mutated.record.party_id})"
+    )
+    self._mirror_honest_to_mutated()
+    with Timer() as timer:
+      honest = self._party_binary.run_parties(
+        self._plan_for(self._config.honest_party_cwds),
+      )
+      perturbed = self._party_binary.run_parties(
+        self._plan_for(self._config.mutated_party_cwds),
+      )
+    return RunResult(
+      honest_run=honest,
+      mutated_run=perturbed,
+      duration_ms=timer.elapsed_ms,
+      timed_out=any(p.exit_code == -1 for p in honest + perturbed),
+    )
+
+  def _plan_for(self, party_cwds: tuple[Path, ...]) -> TwinRunPlan:
+    return TwinRunPlan(
+      program_id=self._config.program_id,
+      party_cwds=party_cwds,
+      timeout_s=self._config.timeout_s,
+    )
+
+  def _mirror_honest_to_mutated(self) -> None:
+    src = self._config.honest_dir / "Programs"
+    dst = self._config.mutated_dir / "Programs"
+    for sub in ("Bytecode", "Schedules"):
+      (dst / sub).mkdir(parents=True, exist_ok=True)
+      for path in (src / sub).iterdir():
+        shutil.copy2(path, dst / sub / path.name)
