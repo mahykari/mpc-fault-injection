@@ -2,7 +2,8 @@
 
 MP-SPDZ was built as a CLI, not a library. These two adapters wrap
 its quirks — CWD-bound output paths, fake-argv option parsing,
-party-binary launch shape — so pipeline components above never see them.
+per-process compiler singleton, party-binary launch shape — so the
+pipeline components above never see them.
 """
 from __future__ import annotations
 
@@ -45,10 +46,11 @@ def _working_directory(target: Path) -> Iterator[None]:
 class MpSpdzCompilerToolkit:
   """Library-shaped wrapper around MP-SPDZ's CLI compiler module.
 
-  Encapsulates: sys.path injection so the package is importable;
-  synthetic argv so MP-SPDZ's OptionParser populates its defaults;
-  chdir to the destination because `Program` resolves output paths
-  relative to CWD.
+  `compile` runs the DSL and returns the in-memory Program object
+  (one per call — Compiler enforces a per-process singleton, which we
+  reset before each call so the Injector can recompile from source for
+  the mutated twin). `finalize_into` runs optimization passes and
+  writes `.bc`/`.sch` under `output_dir/Programs/`.
   """
 
   def __init__(self, config: NeedsCompilerToolkit) -> None:
@@ -56,15 +58,35 @@ class MpSpdzCompilerToolkit:
     if str(config.mpspdz_root) not in sys.path:
       sys.path.insert(0, str(config.mpspdz_root))
 
-  def compile_dsl_into(
-    self, program_id: str, source: str, output_dir: Path,
-  ) -> None:
+  def compile(self, program_id: str, source: str) -> Any:
     compiler_cls = self._load_compiler_class()
+    compiler_cls.singleton = None
+    compiler = compiler_cls(custom_args=[program_id])
+    compiler.prep_compile(name=program_id)
+    exec(source, compiler.VARS)
+    return compiler.prog
+
+  def finalize_into(self, program: Any, output_dir: Path) -> None:
     with _working_directory(output_dir):
-      compiler = compiler_cls(custom_args=[program_id])
-      compiler.prep_compile(name=program_id)
-      exec(source, compiler.VARS)
-      compiler.finalize_compile()
+      for subdir in ("Programs/Bytecode", "Programs/Schedules"):
+        Path(subdir).mkdir(parents=True, exist_ok=True)
+      # Optimization re-emits instructions through MP-SPDZ's module-level
+      # `program` reference (set in Program.__init__). If we compiled
+      # twice, that reference points at the most-recent Program, and
+      # finalizing the earlier one would route its optimized
+      # instructions into the later tape. Restore globals to *this*
+      # program before finalize.
+      self._bind_module_globals(program)
+      program.finalize()
+
+  def _bind_module_globals(self, program: Any) -> None:
+    from Compiler import comparison, instructions, instructions_base, types  # type: ignore[import-not-found]
+    from Compiler.program import Program  # type: ignore[import-not-found]
+    Program.prog = program
+    instructions.program = program
+    instructions_base.program = program
+    types.program = program
+    comparison.program = program
 
   def _load_compiler_class(self) -> Any:
     from Compiler.compilerLib import Compiler as MpCompiler  # type: ignore[import-not-found]

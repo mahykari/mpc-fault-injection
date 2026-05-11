@@ -1,31 +1,65 @@
-"""Stub: Fault Injector (gadget insertion between sync points).
+"""Fault Injector: produce honest + mutated IR pair.
 
-Real impl: walk every tape, identify sync-point PCs, pick a (lo, hi)
-gap on a chosen tape, generate a local-only gadget over live
-registers, splice it into a deep-copy of the IR. Whitelist of gadget
-opcodes enforces the synchronization invariant.
+For the integration milestone the mutation is hardcoded — change the
+immediate operand of the first `ldsi` (the secret-constant load for
+`a` in the tutorial program) on tape 0. Static analysis to pick the
+gap/gadget per BLUEPRINT comes later; right now this proves that
+mutating the in-memory IR survives finalize and reaches the binary.
 
-For now: pretend to splice a drift-and-restore gadget on tape 0.
+Compiling twice (once for honest, once for mutated) is the simple
+substrate: MP-SPDZ's `Compiler.program.Program` resists deep-copy
+because instruction objects have read-only descriptors, so we just
+let the toolkit do two compiles from the same source and mutate one.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from pipeline.config import NeedsInjector
-from pipeline.types import InjectionRecord, MpspdzProgram, MutatedProgram
+from pipeline.mpspdz import MpSpdzCompilerToolkit
+from pipeline.types import (
+  InjectionRecord,
+  MpspdzProgram,
+  MpspdzSource,
+  MutatedProgram,
+)
+
+MUTATED_IMMEDIATE = 42
 
 
-def inject_fault(
-  program: MpspdzProgram, config: NeedsInjector,
-) -> MutatedProgram:
-  record = InjectionRecord(
-    gadget_kind="drift_and_restore",
-    tape_index=0,
-    sync_lo_pc=0,
-    sync_hi_pc=0,
-    party_id=config.malicious_party,
-    details=f"STUB: would generate gadget from seed={config.seed.value}",
-  )
-  print(
-    f"[injector] STUB: would splice {record.gadget_kind} "
-    f"on tape {record.tape_index} (party {record.party_id})"
-  )
-  return MutatedProgram(original=program, mutated=program, record=record)
+class Injector:
+  def __init__(
+    self, toolkit: MpSpdzCompilerToolkit, config: NeedsInjector,
+  ) -> None:
+    self._toolkit = toolkit
+    self._config = config
+
+  def inject(
+    self, source: MpspdzSource, honest: MpspdzProgram,
+  ) -> MutatedProgram:
+    mutated_program = self._toolkit.compile(self._config.program_id, source.source)
+    original_immediate = self._mutate_first_ldsi(mutated_program)
+    record = InjectionRecord(
+      gadget_kind="immediate_swap",
+      tape_index=0,
+      sync_lo_pc=0,
+      sync_hi_pc=0,
+      party_id=self._config.malicious_party,
+      details=f"ldsi immediate {original_immediate} → {MUTATED_IMMEDIATE}",
+    )
+    print(f"[injector] {record.gadget_kind} on tape 0 (party {record.party_id}): {record.details}")
+    return MutatedProgram(
+      original=honest,
+      mutated=MpspdzProgram(program=mutated_program),
+      record=record,
+    )
+
+  @staticmethod
+  def _mutate_first_ldsi(program: Any) -> int:
+    """Change the immediate of the first `ldsi` on tape 0. Return the prior value."""
+    for instruction in program.tapes[0].basicblocks[0].instructions:
+      if type(instruction).__name__ == "ldsi":
+        previous = instruction.args[1]
+        instruction.args[1] = MUTATED_IMMEDIATE
+        return int(previous)
+    raise RuntimeError("no ldsi instruction found on tape 0")

@@ -1,28 +1,27 @@
-"""Executor: launch the honest and mutated twins.
+"""Executor: materialize the twin IRs to disk and launch both runs.
 
 Honest twin: every party reads from `honest/`.
 Mutated twin: the corrupt party reads from `mutated/`; others read
-from `honest/`. Per-party cwd lists are derived on `Config`.
-
-For the plumbing milestone the Injector is a passthrough, so
-`mutated/Programs/` is a byte-for-byte mirror of `honest/Programs/`.
-The mirror step goes away when the Injector emits its own bytecode.
+from `honest/`. Per-party cwd lists live on `Config`.
 """
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from pipeline.config import NeedsExecutor
-from pipeline.mpspdz import MpSpdzPartyBinary, TwinRunPlan
+from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary, TwinRunPlan
 from pipeline.timing import Timer
 from pipeline.types import MutatedProgram, RunResult
 
 
 class Executor:
   def __init__(
-    self, party_binary: MpSpdzPartyBinary, config: NeedsExecutor,
+    self,
+    toolkit: MpSpdzCompilerToolkit,
+    party_binary: MpSpdzPartyBinary,
+    config: NeedsExecutor,
   ) -> None:
+    self._toolkit = toolkit
     self._party_binary = party_binary
     self._config = config
 
@@ -32,7 +31,8 @@ class Executor:
       f"(gadget={mutated.record.gadget_kind}, "
       f"corrupt party={mutated.record.party_id})"
     )
-    self._mirror_honest_to_mutated()
+    self._toolkit.finalize_into(mutated.original.program, self._config.honest_dir)
+    self._toolkit.finalize_into(mutated.mutated.program, self._config.mutated_dir)
     with Timer() as timer:
       honest = self._party_binary.run_parties(
         self._plan_for(self._config.honest_party_cwds),
@@ -53,11 +53,3 @@ class Executor:
       party_cwds=party_cwds,
       timeout_s=self._config.timeout_s,
     )
-
-  def _mirror_honest_to_mutated(self) -> None:
-    src = self._config.honest_dir / "Programs"
-    dst = self._config.mutated_dir / "Programs"
-    for sub in ("Bytecode", "Schedules"):
-      (dst / sub).mkdir(parents=True, exist_ok=True)
-      for path in (src / sub).iterdir():
-        shutil.copy2(path, dst / sub / path.name)
