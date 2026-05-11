@@ -9,30 +9,23 @@ For now: pretend to splice a drift-and-restore gadget on tape 0.
 """
 from __future__ import annotations
 
-from pipeline.types import (
-  InjectionRecord,
-  MpspdzProgram,
-  MutatedProgram,
-  Seed,
-)
+from pipeline.config import NeedsInjector
+from pipeline.types import InjectionRecord, MpspdzProgram, MutatedProgram
 
 
 def inject_fault(
-  program: MpspdzProgram,
-  seed: Seed,
-  malicious_party: int = 1,
+  program: MpspdzProgram, config: NeedsInjector,
 ) -> MutatedProgram:
   record = InjectionRecord(
     gadget_kind="drift_and_restore",
     tape_index=0,
     sync_lo_pc=0,
     sync_hi_pc=0,
-    party_id=malicious_party,
-    details=f"STUB: would generate gadget from seed={seed.value}",
+    party_id=config.malicious_party,
+    details=f"STUB: would generate gadget from seed={config.seed.value}",
   )
   print(
-    f"[injector] STUB: would splice {record.gadget_kind} into "
-    f"{program.program_id} on tape {record.tape_index} "
-    f"(party {record.party_id})"
+    f"[injector] STUB: would splice {record.gadget_kind} "
+    f"on tape {record.tape_index} (party {record.party_id})"
   )
   return MutatedProgram(original=program, mutated=program, record=record)

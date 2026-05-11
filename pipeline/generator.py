@@ -5,24 +5,21 @@ translate them to MP-SPDZ source. For now: hardcoded tutorial program.
 """
 from __future__ import annotations
 
-from pipeline.types import CircilProgram, MpspdzSource, Seed
+from pipeline.config import NeedsGenerator
+from pipeline.types import CircilProgram, MpspdzSource
 
 
-def generate_program(seed: Seed) -> CircilProgram:
-  print(f"[generator] STUB: would generate CircIL program from seed={seed.value}")
-  return CircilProgram(
-    program_id=f"stub-{seed.value:04d}",
-    source="# placeholder CircIL program",
-  )
+def generate_program(config: NeedsGenerator) -> CircilProgram:
+  print(f"[generator] STUB: placeholder CircIL (seed={config.seed.value})")
+  return CircilProgram(source="# placeholder CircIL program")
 
 
 def translate_to_mpspdz(program: CircilProgram) -> MpspdzSource:
-  print(f"[translator] STUB: would lower {program.program_id} to MP-SPDZ source")
-  # Hardcoded tutorial-shaped program so downstream stubs see something plausible.
+  print(f"[translator] STUB: ignoring {len(program.source)}-byte CircIL")
   src = (
     "a = sint(1)\n"
     "b = sint(2)\n"
     "c = (a + b).reveal()\n"
     "print_ln('result: %s', c)\n"
   )
-  return MpspdzSource(program_id=program.program_id, source=src)
+  return MpspdzSource(source=src)

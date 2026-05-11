@@ -1,11 +1,12 @@
 """Stub: Reporter.
 
-Real impl: write structured JSON record to runs/<id>/report.json,
+Real impl: write structured JSON record to `config.report_path`,
 append to runs/bugs.jsonl on BUG verdict, runs/passes.jsonl otherwise.
 For now: assemble Report dataclass from upstream data.
 """
 from __future__ import annotations
 
+from pipeline.config import NeedsReporter
 from pipeline.types import MutatedProgram, Report, RunResult, Verdict
 
 
@@ -13,13 +14,10 @@ def report(
   mutated: MutatedProgram,
   run: RunResult,
   verdict: Verdict,
+  config: NeedsReporter,
 ) -> Report:
-  print(f"[reporter] STUB: would persist run record for {run.program_id}")
+  print(f"[reporter] STUB: would persist run record to {config.report_path}")
   return Report(
-    program_id=run.program_id,
-    protocol=run.protocol,
-    n_parties=run.n_parties,
-    malicious_party=run.malicious_party,
     fault=mutated.record,
     verdict=verdict,
     duration_ms=run.duration_ms,
