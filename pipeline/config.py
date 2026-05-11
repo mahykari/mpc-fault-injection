@@ -71,7 +71,7 @@ class NeedsGenerator(View):
 
 class NeedsInjector(View):
   @property
-  def seed(self) -> Seed: ...
+  def program_id(self) -> str: ...
   @property
   def malicious_party(self) -> int: ...
 
@@ -89,8 +89,6 @@ class NeedsPartyBinary(View):
 class NeedsCompiler(View):
   @property
   def program_id(self) -> str: ...
-  @property
-  def honest_dir(self) -> Path: ...
 
 
 class NeedsExecutor(View):

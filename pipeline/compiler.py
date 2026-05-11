@@ -1,4 +1,4 @@
-"""Compiler component: MP-SPDZ DSL source → on-disk bytecode."""
+"""Compiler component: MP-SPDZ DSL source → in-memory Program."""
 from __future__ import annotations
 
 from pipeline.config import NeedsCompiler
@@ -14,8 +14,6 @@ class Compiler:
     self._config = config
 
   def compile(self, source: MpspdzSource) -> MpspdzProgram:
-    print(f"[compiler] {self._config.program_id} → {self._config.honest_dir}")
-    self._toolkit.compile_dsl_into(
-      self._config.program_id, source.source, self._config.honest_dir,
-    )
-    return MpspdzProgram()
+    print(f"[compiler] {self._config.program_id}: lowering DSL → IR")
+    program = self._toolkit.compile(self._config.program_id, source.source)
+    return MpspdzProgram(program=program)

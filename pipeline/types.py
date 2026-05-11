@@ -6,8 +6,8 @@ these dataclasses — see rule #3 in CLAUDE.md / memory.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 Protocol = Literal["mascot"]
 VerdictLabel = Literal["pass", "bug", "inconclusive"]
@@ -30,12 +30,12 @@ class MpspdzSource:
 
 @dataclass(frozen=True)
 class MpspdzProgram:
-  """Marker that compilation succeeded.
+  """Wraps an in-memory MP-SPDZ `Compiler.program.Program`.
 
-  Empty for the plumbing milestone — the artifacts live on disk under
-  `Config.honest_dir`. Will carry a reference to the in-memory
-  `Compiler.program.Program` once the Injector mutates IR directly.
+  Typed `Any` because MP-SPDZ ships no type stubs. Materialization to
+  `.bc`/`.sch` happens in the Executor, via the toolkit's finalize.
   """
+  program: Any = field(repr=False)
 
 
 @dataclass(frozen=True)
