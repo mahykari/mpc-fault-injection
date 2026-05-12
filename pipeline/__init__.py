@@ -8,6 +8,7 @@ from __future__ import annotations
 from pipeline.compiler import Compiler
 from pipeline.config import Config
 from pipeline.executor import Executor
+from pipeline.gadgets import ImmediateSwapTemplate
 from pipeline.generator import generate_program, translate_to_mpspdz
 from pipeline.injector import Injector
 from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary
@@ -20,7 +21,7 @@ def run_pipeline(config: Config) -> Report:
   toolkit = MpSpdzCompilerToolkit(config)
   party_binary = MpSpdzPartyBinary(config)
   compiler = Compiler(toolkit, config)
-  injector = Injector(toolkit, config)
+  injector = Injector(toolkit, (ImmediateSwapTemplate(),), config)
   executor = Executor(toolkit, party_binary, config)
 
   circil  = generate_program(config)

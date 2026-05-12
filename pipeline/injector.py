@@ -1,10 +1,10 @@
 """Fault Injector: produce honest + mutated IR pair.
 
-For the integration milestone the mutation is hardcoded — change the
-immediate operand of the first `ldsi` (the secret-constant load for
-`a` in the tutorial program) on tape 0. Static analysis to pick the
-gap/gadget per BLUEPRINT comes later; right now this proves that
-mutating the in-memory IR survives finalize and reaches the binary.
+A dispatcher over `GadgetTemplate`s. Per-mutation logic — what the
+mutation looks like and where it lives in the IR — belongs in the
+template, not here. Adding a new gadget kind is adding a file under
+`pipeline/gadgets/` and registering it in the templates tuple in
+`pipeline/__init__.py`.
 
 Compiling twice (once for honest, once for mutated) is the simple
 substrate: MP-SPDZ's `Compiler.program.Program` resists deep-copy
@@ -13,9 +13,11 @@ let the toolkit do two compiles from the same source and mutate one.
 """
 from __future__ import annotations
 
+from random import Random
 from typing import Any
 
 from pipeline.config import NeedsInjector
+from pipeline.gadgets import GadgetTemplate, SyncGap
 from pipeline.mpspdz import MpSpdzCompilerToolkit
 from pipeline.types import (
   InjectionRecord,
@@ -24,42 +26,53 @@ from pipeline.types import (
   MutatedProgram,
 )
 
-MUTATED_IMMEDIATE = 42
-
 
 class Injector:
   def __init__(
-    self, toolkit: MpSpdzCompilerToolkit, config: NeedsInjector,
+    self,
+    toolkit: MpSpdzCompilerToolkit,
+    templates: tuple[GadgetTemplate, ...],
+    config: NeedsInjector,
   ) -> None:
     self._toolkit = toolkit
+    self._templates = templates
     self._config = config
 
   def inject(
     self, source: MpspdzSource, honest: MpspdzProgram,
   ) -> MutatedProgram:
-    mutated_program = self._toolkit.compile(self._config.program_id, source.source)
-    original_immediate = self._mutate_first_ldsi(mutated_program)
+    mutated = self._toolkit.compile(self._config.program_id, source.source)
+    rng = Random(self._config.seed.value)
+    gap = self._pick_gap(mutated)
+    template = self._pick_template(gap, rng)
+    gadget = template.sample(gap, mutated, rng)
+    gadget.apply(mutated)
     record = InjectionRecord(
-      gadget_kind="immediate_swap",
-      tape_index=0,
-      sync_lo_pc=0,
-      sync_hi_pc=0,
+      gadget_kind=gadget.kind,
+      tape_index=gadget.gap.tape_index,
+      sync_lo_pc=gadget.gap.lo_pc,
+      sync_hi_pc=gadget.gap.hi_pc,
       party_id=self._config.malicious_party,
-      details=f"ldsi immediate {original_immediate} → {MUTATED_IMMEDIATE}",
+      details=gadget.details,
     )
-    print(f"[injector] {record.gadget_kind} on tape 0 (party {record.party_id}): {record.details}")
+    print(
+      f"[injector] {record.gadget_kind} on tape {record.tape_index} "
+      f"(party {record.party_id}): {record.details}"
+    )
     return MutatedProgram(
       original=honest,
-      mutated=MpspdzProgram(program=mutated_program),
+      mutated=MpspdzProgram(program=mutated),
       record=record,
     )
 
   @staticmethod
-  def _mutate_first_ldsi(program: Any) -> int:
-    """Change the immediate of the first `ldsi` on tape 0. Return the prior value."""
-    for instruction in program.tapes[0].basicblocks[0].instructions:
-      if type(instruction).__name__ == "ldsi":
-        previous = instruction.args[1]
-        instruction.args[1] = MUTATED_IMMEDIATE
-        return int(previous)
-    raise RuntimeError("no ldsi instruction found on tape 0")
+  def _pick_gap(program: Any) -> SyncGap:
+    # Real sync-point analysis comes when the second template needs it.
+    # For now: program-start gap on tape 0.
+    return SyncGap(tape_index=0, lo_pc=0, hi_pc=0)
+
+  def _pick_template(self, gap: SyncGap, rng: Random) -> GadgetTemplate:
+    applicable = tuple(t for t in self._templates if t.can_apply(gap))
+    if not applicable:
+      raise RuntimeError(f"no gadget template applies to {gap}")
+    return rng.choice(applicable)
