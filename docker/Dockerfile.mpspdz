@@ -1,0 +1,72 @@
+# Build a patched mascot-party.x (and any other party binaries we add later)
+# from MP-SPDZ v0.4.2 source. Builds inside ubuntu:22.04 because Ubuntu
+# 26.04 host has Boost 1.90, which is incompatible with libOTe's ASIO usage.
+#
+# Driven by docker/build.sh, which extracts the binary into
+# MP-SPDZ/bin/Linux-amd64-patched/ on the host.
+
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      automake \
+      build-essential \
+      ca-certificates \
+      clang-11 \
+      cmake \
+      curl \
+      git \
+      libboost-dev \
+      libboost-thread-dev \
+      libclang-dev \
+      libgmp-dev \
+      libntl-dev \
+      libsodium-dev \
+      libssl-dev \
+      libtool \
+      m4 \
+      patch \
+      python3 \
+      xz-utils \
+      yasm \
+      zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN curl -fsSL -o mp-spdz.tar.xz \
+      https://github.com/data61/MP-SPDZ/releases/download/v0.4.2/mp-spdz-0.4.2.tar.xz \
+ && tar -xJf mp-spdz.tar.xz \
+ && rm mp-spdz.tar.xz
+
+WORKDIR /src/mp-spdz-0.4.2
+
+# Apply our patches in numbered order.
+COPY patches/mpspdz/*.patch /patches/
+RUN for p in /patches/*.patch; do echo "Applying $(basename $p)"; patch -p1 < "$p"; done
+
+# Match upstream Dockerfile's CONFIG.mine defaults.
+RUN echo "CXX = clang++-11"                                              >> CONFIG.mine \
+ && echo "USE_NTL = 0"                                                    >> CONFIG.mine \
+ && echo "MY_CFLAGS += -I/usr/local/include"                              >> CONFIG.mine \
+ && echo "MY_LDLIBS += -Wl,-rpath -Wl,/usr/local/lib -L/usr/local/lib"   >> CONFIG.mine
+
+# 2 players matches the harness's n=2 default. setup-ssl.sh just writes
+# placeholder cert/key pairs into Player-Data/; runtime reads them.
+RUN ./Scripts/setup-ssl.sh 2 Player-Data
+
+# Build libOTe's pinned Boost + libOTe, then static/mascot-party.x.
+# The plain `mascot-party.x` target links against libSPDZ.so + the in-container
+# Boost 1.83 and won't run on the host; the `static/mascot-party.x` target
+# (Makefile line 154) static-links Boost + libstdc++, leaving only
+# libc/libdl/libm/libpthread dynamic — matches the stock binary at
+# MP-SPDZ/bin/Linux-amd64/mascot-party.x.
+RUN make clean-deps boost libote
+RUN make -j"$(nproc)" static/mascot-party.x
+
+RUN ls -la static/mascot-party.x && file static/mascot-party.x
+
+# Tiny final stage so `docker build --output type=local,dest=...` (or
+# `docker create` + `docker cp`) pulls out just the binary.
+FROM scratch AS export
+COPY --from=builder /src/mp-spdz-0.4.2/static/mascot-party.x /mascot-party.x

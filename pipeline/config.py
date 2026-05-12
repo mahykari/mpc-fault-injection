@@ -27,6 +27,7 @@ class Config:
   n_parties: int
   malicious_party: int
   timeout_s: float
+  use_patched_binary: bool = False
 
   @property
   def program_id(self) -> str:
@@ -34,7 +35,8 @@ class Config:
 
   @property
   def party_binary_path(self) -> Path:
-    return self.mpspdz_root / "bin" / "Linux-amd64" / f"{self.protocol}-party.x"
+    bin_dir = "Linux-amd64-patched" if self.use_patched_binary else "Linux-amd64"
+    return self.mpspdz_root / "bin" / bin_dir / f"{self.protocol}-party.x"
 
   @property
   def run_dir(self) -> Path:

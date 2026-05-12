@@ -26,3 +26,6 @@ python-circil/
 
 # Per-run artifacts (.bc/.sch, party stdout/stderr, report.json)
 runs/
+
+# Claude Code runtime state (only .claude/agents/ is tracked)
+.claude/scheduled_tasks.lock
