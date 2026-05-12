@@ -1,9 +1,11 @@
 """Adapters around MP-SPDZ's CLI tools (compiler module + party binary).
 
-MP-SPDZ was built as a CLI, not a library. These two adapters wrap
-its quirks — CWD-bound output paths, fake-argv option parsing,
-per-process compiler singleton, party-binary launch shape — so the
-pipeline components above never see them.
+MP-SPDZ was built as a CLI, not a library. These adapters wrap its
+quirks — CWD-bound output paths, fake-argv option parsing, per-process
+compiler singleton, party-binary launch shape, and instruction-list
+mutation — so the pipeline components above never see them. Keep the
+business-logic call sites (gadgets, oracles, ...) free of `inst.args`
+and `type(inst).__name__` pokes; surface clean intent here instead.
 """
 from __future__ import annotations
 
@@ -178,3 +180,54 @@ class MpSpdzPartyBinary:
   @staticmethod
   def _pick_port() -> int:
     return random.randint(20000, 60000)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# IR navigation / mutation helpers.
+#
+# Small functions that reach into MP-SPDZ's `Compiler.program` objects so
+# gadget code doesn't have to. Each helper does one thing on a tape / an
+# instruction / a register. Stay terse; intent in the name, mechanism in
+# the body.
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def find_first_instruction(tape: Any, opcode: str) -> Any | None:
+  """First instruction on `tape` whose opcode name matches `opcode` (e.g. `"ldsi"`)."""
+  for inst in tape.basicblocks[0].instructions:
+    if type(inst).__name__ == opcode:
+      return inst
+  return None
+
+
+def get_dst(inst: Any) -> Any:
+  """The destination register of an instruction (arg slot 0 by MP-SPDZ convention)."""
+  return inst.args[0]
+
+
+def set_dst(inst: Any, reg: Any) -> None:
+  """Redirect an instruction's destination register in place."""
+  inst.args[0] = reg
+
+
+def insert_after(tape: Any, anchor: Any, new_inst: Any) -> None:
+  """Splice `new_inst` immediately after `anchor` in `tape`'s instruction list."""
+  block = tape.basicblocks[0]
+  idx = block.instructions.index(anchor)
+  block.instructions.insert(idx + 1, new_inst)
+
+
+def new_reg_like(tape: Any, reg: Any) -> Any:
+  """Allocate a fresh register of the same type as `reg` on `tape`."""
+  return tape.new_reg(reg.reg_type)
+
+
+def make_addsi(dst: Any, src: Any, imm: int) -> Any:
+  """Build an `addsi dst, src, imm` instruction not attached to any tape.
+
+  MP-SPDZ's `Instruction.__init__` normally appends itself to the active
+  program's current basic block. `add_to_prog=False` keeps it free so the
+  caller can splice it where they want.
+  """
+  from Compiler.instructions import addsi  # type: ignore[import-not-found]
+  return addsi(dst, src, imm, add_to_prog=False)
