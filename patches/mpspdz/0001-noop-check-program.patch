@@ -1,0 +1,39 @@
+Disable Machine::check_program bytecode-fingerprint check.
+
+The twin-run design (BLUEPRINT.md) has corrupt parties load mutated
+bytecode while honest parties load the original. The fingerprint check
+runs in prepare() before any computation, hashes each tape's raw .bc
+bytes, broadcasts hashes among parties, and aborts on mismatch. It runs
+in every protocol (semi-honest too) — it's a baseline integrity check,
+not a malicious-security mechanism. Disabling it lets the harness
+exercise the layers that actually matter (MAC checks at OPEN, etc.).
+
+See notes/mpspdz-patching.md for the broader plan.
+
+--- a/Processor/Machine.hpp
++++ b/Processor/Machine.hpp
+@@ -768,20 +768,10 @@
+ template<class sint, class sgf2n>
+ void Machine<sint, sgf2n>::check_program()
+ {
+-  Hash hasher;
+-  for (auto& prog : progs)
+-    hasher.update(prog.get_hash());
+-  assert(P);
+-  Bundle<octetStream> bundle(*P);
+-  hasher.final(bundle.mine);
+-  try
+-  {
+-    bundle.compare(*P);
+-  }
+-  catch (mismatch_among_parties&)
+-  {
+-    throw runtime_error("program differs between parties");
+-  }
++  // mpc-fault-injection: bytecode-fingerprint check disabled so the
++  // twin-run harness can ship mutated .bc to corrupt parties. See
++  // notes/mpspdz-patching.md.
++  return;
+ }
+
+ template<class sint, class sgf2n>

@@ -5,6 +5,14 @@ bytecode) is blocked at startup by a fingerprint check that MP-SPDZ
 runs before any computation. To do real IR-level fault injection we
 need to disable that check (and likely more, as we hit them).
 
+**Status (2026-05-12):** initial container-built patched binary is in
+place — `MP-SPDZ/bin/Linux-amd64-patched/mascot-party.x` ships
+`Machine::check_program` as `return;` (`0001-noop-check-program.patch`).
+With it, the LDSI immediate mutation now reaches and trips MASCOT's MAC
+check at OPEN: `Fatal error at <prog>:3 (OPEN): MacCheck Failure`. The
+malicious-security mechanism we wanted to probe is what catches the
+mutation — exactly the BLUEPRINT-table "pass" outcome.
+
 ## What we've found
 
 ### `check_program` is the immediate blocker

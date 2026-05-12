@@ -24,6 +24,7 @@ def main() -> None:
     n_parties=2,
     malicious_party=1,
     timeout_s=30.0,
+    use_patched_binary=True,
   )
   report = run_pipeline(config)
 
