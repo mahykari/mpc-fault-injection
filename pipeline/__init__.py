@@ -9,11 +9,12 @@ from pipeline.compiler import Compiler
 from pipeline.config import Config
 from pipeline.executor import Executor
 from pipeline.gadgets import SingleVariableBumpTemplate
-from pipeline.generator import generate_program, translate_to_mpspdz
+from pipeline.generator import generate_program
 from pipeline.injector import Injector
 from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary
 from pipeline.oracle import judge
 from pipeline.reporter import report
+from pipeline.translator import translate_to_mpspdz
 from pipeline.types import Report
 
 

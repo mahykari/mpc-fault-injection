@@ -1,25 +1,55 @@
-"""Stub: Program Generator + CircIL → MP-SPDZ translator.
+"""Program Generator: drives python-circil's SimpleCircuitFuzzer.
 
-Real impl will call into python-circil to generate programs and
-translate them to MP-SPDZ source. For now: hardcoded tutorial program.
+The fuzzer's surface is huge (arrays, lambdas, ternaries, generics,
+custom functions); we strip it to Field-only arithmetic over the
+three op gadgets — MUL, SUB, ADD — so the translator below stays
+small and downstream MP-SPDZ compilation is predictable.
 """
 from __future__ import annotations
 
+import pipeline.circil as _circil_path_setup  # noqa: F401
+from random import Random
+
+import circil.ir.types as IRType  # type: ignore[import-not-found]
+from circil.fuzzer.builtin_operators import Builtins  # type: ignore[import-not-found]
+from circil.fuzzer.config import FuzzerConfig  # type: ignore[import-not-found]
+from circil.fuzzer.simple import SimpleCircuitFuzzer  # type: ignore[import-not-found]
+
 from pipeline.config import NeedsGenerator
-from pipeline.types import CircilProgram, MpspdzSource
+from pipeline.types import CircilProgram
+
+# CircIL bounds emitted constants by this modulo. Kept small (Mersenne
+# prime 2^31 - 1) so constants comfortably fit MP-SPDZ's default field
+# and the translator can emit them as plain `sint(<int>)` literals.
+FIELD_MODULO = 2**31 - 1
+
+
+def _fuzzer_config() -> FuzzerConfig:
+  return FuzzerConfig(
+    max_expression_depth=3,
+    min_assertions=0, max_assertions=0,
+    min_circuit_input_signals=2, max_circuit_input_signals=4,
+    min_circuit_output_signals=1, max_circuit_output_signals=2,
+    probability_boundary_value=0.1,
+    disable_field_modulo_boundary_value=True,
+    ternary_expression_types=[],
+    input_signal_types=[IRType.Field],
+    output_signal_types=[IRType.Field],
+    allowed_generic_concrete_types=[IRType.Field],
+    enable_fixed_size_array=False,
+    max_lambda_depth=0,
+    probability_weight_let=0,
+    custom_functions=[Builtins.MUL, Builtins.SUB, Builtins.ADD],
+  )
 
 
 def generate_program(config: NeedsGenerator) -> CircilProgram:
-  print(f"[generator] STUB: placeholder CircIL (seed={config.seed.value})")
-  return CircilProgram(source="# placeholder CircIL program")
-
-
-def translate_to_mpspdz(program: CircilProgram) -> MpspdzSource:
-  print(f"[translator] STUB: ignoring {len(program.source)}-byte CircIL")
-  src = (
-    "a = sint(1)\n"
-    "b = sint(2)\n"
-    "c = (a + b).reveal()\n"
-    "print_ln('result: %s', c)\n"
+  rng = Random(config.seed.value)
+  circuit = SimpleCircuitFuzzer(FIELD_MODULO, rng, _fuzzer_config()).run()
+  print(
+    f"[generator] CircIL circuit (seed={config.seed.value}, "
+    f"inputs={len(circuit.inputs)}, "
+    f"outputs={len(circuit.outputs)}, "
+    f"statements={len(circuit.statements)})"
   )
-  return MpspdzSource(source=src)
+  return CircilProgram(circuit=circuit)
