@@ -98,6 +98,10 @@ MP-SPDZ Python DSL.
 - `disable_field_modulo_boundary_value=True` because emitting a literal
   equal to MP-SPDZ's field modulo is meaningless.
 
+## Future directions
+
+- Re-enable ternary (`ternary_expression_types=[IRType.Field]`). On secret operands MP-SPDZ compiles it to a MUX (mul-based selection) — exercises the translator beyond straight-line arithmetic and lands on a malicious-vs-semi-honest delta (the mul).
+
 ## Pipeline invariants to preserve
 
 - `uv run python main.py` end-to-end on the new generator.
