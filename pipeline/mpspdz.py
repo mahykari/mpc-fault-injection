@@ -14,24 +14,11 @@ import random
 import subprocess
 import sys
 from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
 from pipeline.config import NeedsCompilerToolkit, NeedsPartyBinary
 from pipeline.types import PartyOutput
-
-
-@dataclass(frozen=True)
-class TwinRunPlan:
-  """One twin to launch: the program, one cwd per party, and a timeout."""
-  program_id: str
-  party_cwds: tuple[Path, ...]
-  timeout_s: float
-
-  @property
-  def n_parties(self) -> int:
-    return len(self.party_cwds)
 
 
 @contextmanager
@@ -105,8 +92,13 @@ class MpSpdzPartyBinary:
   def __init__(self, config: NeedsPartyBinary) -> None:
     self._config = config
 
-  def run_parties(self, plan: TwinRunPlan) -> tuple[PartyOutput, ...]:
-    """Spawn one party per cwd in `plan`, then collect each output.
+  def run_parties(
+    self,
+    program_id: str,
+    party_cwds: tuple[Path, ...],
+    timeout_s: float,
+  ) -> tuple[PartyOutput, ...]:
+    """Spawn one party per cwd, then collect each output.
 
     The parties have to run concurrently: each one connects to its
     peers over sockets at startup and won't make progress until every
@@ -117,15 +109,16 @@ class MpSpdzPartyBinary:
     the list collecting each output. By the time we call communicate
     on party 0, every party is already up and talking to its peers.
     """
+    n_parties = len(party_cwds)
     port = self._pick_port()
     processes = [
-      self._spawn(plan.program_id,
-                  party_id=i, n_parties=plan.n_parties,
-                  port=port, cwd=plan.party_cwds[i])
-      for i in range(plan.n_parties)
+      self._spawn(program_id,
+                  party_id=i, n_parties=n_parties,
+                  port=port, cwd=party_cwds[i])
+      for i in range(n_parties)
     ]
     return tuple(
-      self._collect(proc, party_id=i, timeout_s=plan.timeout_s)
+      self._collect(proc, party_id=i, timeout_s=timeout_s)
       for i, proc in enumerate(processes)
     )
 
