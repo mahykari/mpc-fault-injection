@@ -20,7 +20,12 @@ class Seed:
 
 @dataclass(frozen=True)
 class CircilProgram:
-  source: str  # CircIL textual representation
+  """Wraps an in-memory `circil.ir.node.Circuit`.
+
+  Typed `Any` because python-circil ships no type stubs. The
+  Translator walks this AST to emit MP-SPDZ DSL source.
+  """
+  circuit: Any = field(repr=False)
 
 
 @dataclass(frozen=True)
