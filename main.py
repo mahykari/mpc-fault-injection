@@ -19,7 +19,7 @@ def main() -> None:
   config = Config(
     mpspdz_root=MPSPDZ_ROOT,
     runs_root=RUNS_ROOT,
-    seed=Seed(value=42),
+    seed=Seed(value=100),
     protocol="mascot",
     n_parties=2,
     malicious_party=1,
