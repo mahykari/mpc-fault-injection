@@ -67,6 +67,14 @@ class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
     self.visit(node.arguments[1])
     self._expr.append(")")
 
+  def visit_let_expression(self, node: Any) -> None:
+    buffer = self._expr
+    self._expr = []
+    self.visit(node.value)
+    self.lines.append(f"{node.var} = {''.join(self._expr)}")
+    self._expr = buffer
+    self.visit(node.body)
+
 
 def translate_to_mpspdz(program: CircilProgram) -> MpspdzSource:
   walker = MpspdzTranslation()
