@@ -95,6 +95,26 @@ MP-SPDZ Python DSL.
 - `SingleVariableBumpTemplate` anchors on the first LDSI on tape 0.
   Baked `sint(literal)` inputs compile to LDSIs, so the anchor should
   survive — verify empirically on first run.
+  - Verified the anchor survives, but it lands on `in0`'s LDSI, which
+    is dead for most generated programs. Concrete case (seed=100,
+    current generator config): outputs use `in3` and constants, so
+    bumping `in0` produces no divergence. Honest and mutated twins
+    both print:
+    ```
+    in0 = sint(1)
+    in1 = sint(2)
+    in2 = sint(3)
+    in3 = sint(4)
+    let_var_00000 = sint(1192711701)
+    out0 = ((sint(1801533470) - (sint(745186389) * in3)) * let_var_00000)
+    out1 = sint(805519004)
+    out2 = sint(266488293)
+    ```
+    Identical output ≠ soundness bug; the mutation just hit a dead
+    register. Fix shape: live-path analysis from each OPEN to restrict
+    anchor selection to writers on the def-use closure. Same redirect-
+    and-bump shape extends to `mulsi` / `MUL` result / TRIPLE / SQUARE /
+    DABIT, which is where MASCOT's malicious-only verification lives.
 - `disable_field_modulo_boundary_value=True` because emitting a literal
   equal to MP-SPDZ's field modulo is meaningless.
 
