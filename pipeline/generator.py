@@ -38,7 +38,7 @@ def _fuzzer_config() -> FuzzerConfig:
     allowed_generic_concrete_types=[IRType.Field],
     enable_fixed_size_array=False,
     max_lambda_depth=0,
-    probability_weight_let=0,
+    probability_weight_let=0.3,
     custom_functions=[Builtins.MUL, Builtins.SUB, Builtins.ADD],
   )
 
