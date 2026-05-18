@@ -79,5 +79,8 @@ class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
 def translate_to_mpspdz(program: CircilProgram) -> MpspdzSource:
   walker = MpspdzTranslation()
   walker.visit(program.circuit)
-  print(f"[translator] emitted {len(walker.lines)} lines of MP-SPDZ DSL")
-  return MpspdzSource(source="\n".join(walker.lines) + "\n")
+  source = "\n".join(walker.lines) + "\n"
+  print(f"[translator] emitted {len(walker.lines)} lines of MP-SPDZ DSL:")
+  for line in walker.lines:
+    print(f"  | {line}")
+  return MpspdzSource(source=source)
