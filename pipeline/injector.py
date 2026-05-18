@@ -18,7 +18,7 @@ from typing import Any
 
 from pipeline.config import NeedsInjector
 from pipeline.gadgets import GadgetTemplate, SyncGap
-from pipeline.mpspdz import MpSpdzCompilerToolkit
+from pipeline.mpspdz import MpSpdzCompilerToolkit, sync_signature
 from pipeline.types import (
   InjectionRecord,
   MpspdzProgram,
@@ -47,6 +47,7 @@ class Injector:
     template = self._pick_template(gap, rng)
     gadget = template.sample(gap, mutated, rng)
     gadget.apply(mutated)
+    self._check_sync_invariant(honest.program, mutated)
     record = InjectionRecord(
       gadget_kind=gadget.kind,
       tape_index=gadget.gap.tape_index,
@@ -64,6 +65,26 @@ class Injector:
       mutated=MpspdzProgram(program=mutated),
       record=record,
     )
+
+  @staticmethod
+  def _check_sync_invariant(honest: Any, mutated: Any) -> None:
+    """Refuse to run if the mutation reshaped the inter-party message flow.
+
+    Honest parties run unmutated bytecode and expect a specific sequence
+    of network-touching ops; if the mutated tape's sequence diverges they
+    would deadlock or interpret messages out of order.
+    """
+    for idx, (honest_tape, mutated_tape) in enumerate(
+      zip(honest.tapes, mutated.tapes)
+    ):
+      honest_sig = sync_signature(honest_tape)
+      mutated_sig = sync_signature(mutated_tape)
+      if honest_sig != mutated_sig:
+        raise RuntimeError(
+          f"sync signature diverged on tape {idx}:\n"
+          f"  honest:  {honest_sig}\n"
+          f"  mutated: {mutated_sig}"
+        )
 
   @staticmethod
   def _pick_gap(program: Any) -> SyncGap:

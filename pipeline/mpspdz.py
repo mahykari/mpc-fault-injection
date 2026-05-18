@@ -215,6 +215,30 @@ def new_reg_like(tape: Any, reg: Any) -> Any:
   return tape.new_reg(reg.reg_type)
 
 
+def sync_signature(tape: Any) -> tuple[str, ...]:
+  """Ordered list of network-touching opcodes on `tape`.
+
+  An instruction is sync-relevant iff it transmits or consumes
+  preprocessed correlation between parties — MP-SPDZ's `DataInstruction`
+  base class covers exactly that set: `asm_open`, `triple`, `square`,
+  `bit`, `dabit`, `inputmask*`. Equal signatures across two compiled
+  programs (honest vs mutated) → identical message-exchange shape, so
+  honest parties see the same protocol they would have anyway.
+
+  Jumps deliberately not in the signature: all MP-SPDZ jumps are over
+  public values (`int` or `ci` register), so every party traverses the
+  same path. The dynamic sync sequence equals the static one on every
+  party, regardless of jump structure.
+  """
+  from Compiler.instructions_base import DataInstruction  # type: ignore[import-not-found]
+  return tuple(
+    type(inst).__name__
+    for block in tape.basicblocks
+    for inst in block.instructions
+    if isinstance(inst, DataInstruction)
+  )
+
+
 def make_addsi(dst: Any, src: Any, imm: int) -> Any:
   """Build an `addsi dst, src, imm` instruction not attached to any tape.
 
