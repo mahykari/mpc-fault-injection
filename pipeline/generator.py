@@ -26,10 +26,10 @@ FIELD_MODULO = 2**31 - 1
 
 def _fuzzer_config() -> FuzzerConfig:
   return FuzzerConfig(
-    max_expression_depth=3,
+    max_expression_depth=10,
     min_assertions=0, max_assertions=0,
-    min_circuit_input_signals=2, max_circuit_input_signals=4,
-    min_circuit_output_signals=1, max_circuit_output_signals=2,
+    min_circuit_input_signals=2, max_circuit_input_signals=10,
+    min_circuit_output_signals=1, max_circuit_output_signals=5,
     probability_boundary_value=0.1,
     disable_field_modulo_boundary_value=True,
     ternary_expression_types=[],
