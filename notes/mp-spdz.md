@@ -131,7 +131,6 @@ That stripped set is the fault-injection target. Concretely:
 
 - **MAC checks** — opening a value must be followed by
   `MC.Check(Player)`. Missing/late check → silent wrong output.
-  Rushing-at-SPDZ found a missing check around `TRUNC_PR`.
 - **Sacrificing** — Beaver triples are verified by sacrificing
   a second triple. Skipping/corrupting this lets bad triples
   poison MULS.
@@ -139,6 +138,62 @@ That stripped set is the fault-injection target. Concretely:
   cross-checks OT outputs. Skip → unverified triples.
 - **Opening sequence** — commit → open → MAC-check → release.
   Releasing before MAC-check is a thread-race attack vector.
+
+## Sync points: `DataInstruction` and the IR signature
+
+The Injector preserves a per-tape sync signature
+(`pipeline/mpspdz.py:sync_signature`) — the ordered sequence of
+`Compiler.instructions_base.DataInstruction` opcodes. Mutated tapes
+must match the honest tape opcode-for-opcode on this signature.
+
+`DataInstruction` covers two things:
+- **Preprocessing consumers** — `triple`, `square`, `bit`, `dabit`,
+  `inverse`, `randomfulls`. Runtime is a local buffer read; sync
+  happened at preprocessing time.
+- **Online communicators** — `asm_open`, `muls`, `mulrs`, `matmuls`,
+  `dotprods`, `conv2ds`, `shuffle*`, `privateoutput`. Actual
+  network traffic at the opcode.
+
+Both must stay aligned across parties. Using the full set as the
+signature is correct but not exhaustive — other opcodes also need
+ordering preserved if they appear:
+- `input*` family (`RawInputInstruction` subtree) — asymmetric input
+- `check` — explicit MAC check
+- thread `start`/`stop`, `reqbl`, `use_prep` — control / prep plan
+
+For the current single-threaded, input-free CircIL circuits, the
+`DataInstruction` signature alone is sufficient. Adding inputs or
+threading means growing the signature.
+
+## Quirk: public-constant load is asymmetric
+
+`sint(c)` and `addsi r, r, c` (anything that adds a *public* constant
+to a secret share) is *not* symmetric across parties. The Share's
+**value half** is added on P_0 only; the **MAC half** is added on
+every party. Source: `Protocols/SemiShare.h:100` (`SemiShare::constant`
+returns `c` on P_0, `0` elsewhere) feeding `Protocols/Share.h:250`
+(`Share_::assign` sets `mac = c * alphai` unconditionally). The ADDSI
+opcode inlines this at `Processor/instructions.h:33-34`:
+```
+*dest = *op1 + sint::constant(int(n), my_num, alphai)
+```
+
+Honest correctness: `Σ_i value = x + c` (only P_0 added c, others
+added 0) and `Σ_i mac = α · (x + c)` (every party added `α_i · c`).
+Both invariants restored, no communication.
+
+Why it matters for the injector: a `SingleVariableBump`-style gadget
+that splices an ADDSI on a corrupt party shifts that party's MAC
+share by `α_i · δ` but only shifts its **value** share if the corrupt
+party is P_0. So when P_0 ∉ S (the sampled corrupt set), the
+reconstructed value at the next OPEN is unchanged from honest — the
+only fault signal is MAC drift, which `Check()` catches.
+
+Consequence for mutation testing: a planted MAC-check skip + non-P_0
+corrupt + ADDSI gadget = both twins produce the same output, plant
+survives, injector reports nothing. Today's workaround is to keep
+P_0 in S; the longer-term fix is a symmetric-bump gadget (MULSI
+class, or a runtime-patched raw-value-bump opcode).
 
 ## Grep recipes
 
