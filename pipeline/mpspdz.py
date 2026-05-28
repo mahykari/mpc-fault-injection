@@ -193,6 +193,16 @@ def find_first_instruction(tape: Any, opcode: str) -> Any | None:
   return None
 
 
+def find_all_instructions(tape: Any, opcode: str) -> list[Any]:
+  """All instructions on `tape` (across blocks) whose opcode name matches `opcode`."""
+  return [
+    inst
+    for block in tape.basicblocks
+    for inst in block.instructions
+    if type(inst).__name__ == opcode
+  ]
+
+
 def get_dst(inst: Any) -> Any:
   """The destination register of an instruction (arg slot 0 by MP-SPDZ convention)."""
   return inst.args[0]
@@ -205,9 +215,12 @@ def set_dst(inst: Any, reg: Any) -> None:
 
 def insert_after(tape: Any, anchor: Any, new_inst: Any) -> None:
   """Splice `new_inst` immediately after `anchor` in `tape`'s instruction list."""
-  block = tape.basicblocks[0]
-  idx = block.instructions.index(anchor)
-  block.instructions.insert(idx + 1, new_inst)
+  for block in tape.basicblocks:
+    if anchor in block.instructions:
+      idx = block.instructions.index(anchor)
+      block.instructions.insert(idx + 1, new_inst)
+      return
+  raise RuntimeError(f"anchor not found on tape: {anchor}")
 
 
 def new_reg_like(tape: Any, reg: Any) -> Any:
@@ -248,3 +261,9 @@ def make_addsi(dst: Any, src: Any, imm: int) -> Any:
   """
   from Compiler.instructions import addsi  # type: ignore[import-not-found]
   return addsi(dst, src, imm, add_to_prog=False)
+
+
+def make_mulsi(dst: Any, src: Any, imm: int) -> Any:
+  """Build a `mulsi dst, src, imm` instruction (computes `dst = src * imm`)."""
+  from Compiler.instructions import mulsi
+  return mulsi(dst, src, imm, add_to_prog=False)

@@ -21,8 +21,8 @@ def main() -> None:
     runs_root=RUNS_ROOT,
     seed=Seed(value=100),
     protocol="mascot",
-    n_parties=2,
-    malicious_party=1,
+    n_parties=3,
+    malicious_parties=(0, 1),
     timeout_s=30.0,
     use_patched_binary=True,
   )
@@ -33,7 +33,7 @@ def main() -> None:
   print(f"  program_id:      {config.program_id}")
   print(f"  protocol:        {config.protocol}")
   print(f"  n_parties:       {config.n_parties}")
-  print(f"  malicious_party: {config.malicious_party}")
+  print(f"  malicious_parties: {list(config.malicious_parties)}")
   print(f"  run_dir:         {config.run_dir}")
 
   print()

@@ -1,10 +1,12 @@
 """Fault Injector: produce honest + mutated IR pair.
 
-A dispatcher over `GadgetTemplate`s. Per-mutation logic — what the
-mutation looks like and where it lives in the IR — belongs in the
-template, not here. Adding a new gadget kind is adding a file under
-`pipeline/gadgets/` and registering it in the templates tuple in
-`pipeline/__init__.py`.
+Picks anchors centrally (LDSI sites on tape 0), then dispatches each
+anchor to a `GadgetTemplate` to build a concrete splice. Multiple
+gadgets per program is the default — `k` distinct anchors sampled
+without replacement.
+
+Adding a new gadget kind: add a file under `pipeline/gadgets/` and
+register the template in the tuple in `pipeline/__init__.py`.
 
 Compiling twice (once for honest, once for mutated) is the simple
 substrate: MP-SPDZ's `Compiler.program.Program` resists deep-copy
@@ -17,14 +19,18 @@ from random import Random
 from typing import Any
 
 from pipeline.config import NeedsInjector
-from pipeline.gadgets import GadgetTemplate, SyncGap
-from pipeline.mpspdz import MpSpdzCompilerToolkit, sync_signature
+from pipeline.gadgets import GadgetTemplate
+from pipeline.mpspdz import MpSpdzCompilerToolkit, find_all_instructions, sync_signature
 from pipeline.types import (
   InjectionRecord,
   MpspdzProgram,
   MpspdzSource,
   MutatedProgram,
 )
+
+ANCHOR_OPCODE = "ldsi"
+TAPE_INDEX = 0
+MAX_GADGETS = 5
 
 
 class Injector:
@@ -43,23 +49,33 @@ class Injector:
   ) -> MutatedProgram:
     mutated = self._toolkit.compile(self._config.program_id, source.source)
     rng = Random(self._config.seed.value)
-    gap = self._pick_gap(mutated)
-    template = self._pick_template(gap, rng)
-    gadget = template.sample(gap, mutated, rng)
-    gadget.apply(mutated)
+    tape = mutated.tapes[TAPE_INDEX]
+    anchors = find_all_instructions(tape, ANCHOR_OPCODE)
+    if not anchors:
+      raise RuntimeError(f"no {ANCHOR_OPCODE} anchors on tape {TAPE_INDEX}")
+
+    k = rng.randint(1, min(MAX_GADGETS, len(anchors)))
+    picks = rng.sample(anchors, k)
+    gadgets = [
+      rng.choice(self._templates).make(TAPE_INDEX, anchor, rng)
+      for anchor in picks
+    ]
+    for gadget in gadgets:
+      gadget.apply(mutated)
+
     self._check_sync_invariant(honest.program, mutated)
     record = InjectionRecord(
-      gadget_kind=gadget.kind,
-      tape_index=gadget.gap.tape_index,
-      sync_lo_pc=gadget.gap.lo_pc,
-      sync_hi_pc=gadget.gap.hi_pc,
-      party_id=self._config.malicious_party,
-      details=gadget.details,
+      tape_index=TAPE_INDEX,
+      party_ids=self._config.malicious_parties,
+      gadget_kinds=tuple(g.kind for g in gadgets),
+      details=tuple(g.details for g in gadgets),
     )
     print(
-      f"[injector] {record.gadget_kind} on tape {record.tape_index} "
-      f"(party {record.party_id}): {record.details}"
+      f"[injector] {len(gadgets)} gadget(s) on tape {record.tape_index} "
+      f"(parties {list(record.party_ids)}):"
     )
+    for kind, detail in zip(record.gadget_kinds, record.details):
+      print(f"  - {kind}: {detail}")
     return MutatedProgram(
       original=honest,
       mutated=MpspdzProgram(program=mutated),
@@ -85,15 +101,3 @@ class Injector:
           f"  honest:  {honest_sig}\n"
           f"  mutated: {mutated_sig}"
         )
-
-  @staticmethod
-  def _pick_gap(program: Any) -> SyncGap:
-    # Real sync-point analysis comes when the second template needs it.
-    # For now: program-start gap on tape 0.
-    return SyncGap(tape_index=0, lo_pc=0, hi_pc=0)
-
-  def _pick_template(self, gap: SyncGap, rng: Random) -> GadgetTemplate:
-    applicable = tuple(t for t in self._templates if t.can_apply(gap))
-    if not applicable:
-      raise RuntimeError(f"no gadget template applies to {gap}")
-    return rng.choice(applicable)

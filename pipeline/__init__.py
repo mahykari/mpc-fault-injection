@@ -8,7 +8,7 @@ from __future__ import annotations
 from pipeline.compiler import Compiler
 from pipeline.config import Config
 from pipeline.executor import Executor
-from pipeline.gadgets import SingleVariableBumpTemplate
+from pipeline.gadgets import BumpTemplate, SignFlipTemplate
 from pipeline.generator import generate_program
 from pipeline.injector import Injector
 from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary
@@ -22,7 +22,7 @@ def run_pipeline(config: Config) -> Report:
   toolkit = MpSpdzCompilerToolkit(config)
   party_binary = MpSpdzPartyBinary(config)
   compiler = Compiler(toolkit, config)
-  injector = Injector(toolkit, (SingleVariableBumpTemplate(),), config)
+  injector = Injector(toolkit, (BumpTemplate(), SignFlipTemplate()), config)
   executor = Executor(toolkit, party_binary, config)
 
   circil  = generate_program(config)

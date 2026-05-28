@@ -45,12 +45,10 @@ class MpspdzProgram:
 
 @dataclass(frozen=True)
 class InjectionRecord:
-  gadget_kind: str
   tape_index: int
-  sync_lo_pc: int
-  sync_hi_pc: int
-  party_id: int
-  details: str
+  party_ids: tuple[int, ...]
+  gadget_kinds: tuple[str, ...]
+  details: tuple[str, ...]
 
 
 @dataclass(frozen=True)

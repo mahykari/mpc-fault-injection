@@ -13,7 +13,7 @@ from pathlib import Path
 from pipeline import Config
 from pipeline.compiler import Compiler
 from pipeline.executor import Executor
-from pipeline.gadgets import SingleVariableBumpTemplate
+from pipeline.gadgets import BumpTemplate, SignFlipTemplate
 from pipeline.generator import generate_program
 from pipeline.injector import Injector
 from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary
@@ -29,8 +29,8 @@ def main() -> None:
     runs_root=REPO_ROOT / "runs",
     seed=Seed(value=100),
     protocol="mascot",
-    n_parties=2,
-    malicious_party=1,
+    n_parties=3,
+    malicious_parties=(0, 1),
     timeout_s=30.0,
     use_patched_binary=True,
   )
@@ -38,7 +38,7 @@ def main() -> None:
   toolkit = MpSpdzCompilerToolkit(config)
   party_binary = MpSpdzPartyBinary(config)
   compiler = Compiler(toolkit, config)
-  injector = Injector(toolkit, (SingleVariableBumpTemplate(),), config)
+  injector = Injector(toolkit, (BumpTemplate(), SignFlipTemplate()), config)
   executor = Executor(toolkit, party_binary, config)
 
   circil  = generate_program(config)

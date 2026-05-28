@@ -26,8 +26,8 @@ class Executor:
   def execute(self, mutated: MutatedProgram) -> RunResult:
     print(
       f"[executor] {self._config.program_id}: twin-run "
-      f"(gadget={mutated.record.gadget_kind}, "
-      f"corrupt party={mutated.record.party_id})"
+      f"({len(mutated.record.gadget_kinds)} gadget(s), "
+      f"corrupt parties={list(mutated.record.party_ids)})"
     )
     self._toolkit.finalize_into(mutated.original.program, self._config.honest_dir)
     self._toolkit.finalize_into(mutated.mutated.program, self._config.mutated_dir)

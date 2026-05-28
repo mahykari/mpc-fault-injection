@@ -25,7 +25,7 @@ class Config:
   seed: Seed
   protocol: Protocol
   n_parties: int
-  malicious_party: int
+  malicious_parties: tuple[int, ...]
   timeout_s: float
   use_patched_binary: bool = False
 
@@ -56,8 +56,9 @@ class Config:
 
   @property
   def mutated_party_cwds(self) -> tuple[Path, ...]:
+    corrupt = frozenset(self.malicious_parties)
     return tuple(
-      self.mutated_dir if i == self.malicious_party else self.honest_dir
+      self.mutated_dir if i in corrupt else self.honest_dir
       for i in range(self.n_parties)
     )
 
@@ -75,7 +76,7 @@ class NeedsInjector(View):
   @property
   def program_id(self) -> str: ...
   @property
-  def malicious_party(self) -> int: ...
+  def malicious_parties(self) -> tuple[int, ...]: ...
   @property
   def seed(self) -> Seed: ...
 
