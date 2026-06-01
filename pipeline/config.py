@@ -28,6 +28,8 @@ class Config:
   malicious_parties: tuple[int, ...]
   timeout_s: float
   use_patched_binary: bool = False
+  expression_depth: int = 20
+  let_probability: float = 0.6
 
   @property
   def program_id(self) -> str:
@@ -70,6 +72,10 @@ class Config:
 class NeedsGenerator(View):
   @property
   def seed(self) -> Seed: ...
+  @property
+  def expression_depth(self) -> int: ...
+  @property
+  def let_probability(self) -> float: ...
 
 
 class NeedsInjector(View):
