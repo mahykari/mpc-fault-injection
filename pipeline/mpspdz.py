@@ -10,7 +10,7 @@ and `type(inst).__name__` pokes; surface clean intent here instead.
 from __future__ import annotations
 
 import os
-import random
+import socket
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -110,7 +110,7 @@ class MpSpdzPartyBinary:
     on party 0, every party is already up and talking to its peers.
     """
     n_parties = len(party_cwds)
-    port = self._pick_port()
+    port = self._pick_port(n_parties)
     processes = [
       self._spawn(program_id,
                   party_id=i, n_parties=n_parties,
@@ -171,8 +171,39 @@ class MpSpdzPartyBinary:
       )
 
   @staticmethod
-  def _pick_port() -> int:
-    return random.randint(20000, 60000)
+  def _pick_port(n_parties: int, attempts: int = 50) -> int:
+    """Find a base port P such that P..P+n_parties-1 are all bindable
+    with SO_REUSEADDR set — matching MP-SPDZ's ServerSocket behavior
+    (Networking/ServerSocket.cpp:40), so TIME_WAIT ports are accepted.
+    MP-SPDZ uses `port + player_id` per party (Networking/Player.h:50),
+    hence the contiguous-window requirement.
+    """
+    for _ in range(attempts):
+      with socket.socket() as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("", 0))
+        base: int = s.getsockname()[1]
+      probes: list[socket.socket] = []
+      ok = True
+      try:
+        for offset in range(n_parties):
+          t = socket.socket()
+          t.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          try:
+            t.bind(("", base + offset))
+            probes.append(t)
+          except OSError:
+            t.close()
+            ok = False
+            break
+        if ok:
+          return base
+      finally:
+        for t in probes:
+          t.close()
+    raise RuntimeError(
+      f"could not find a free {n_parties}-port window after {attempts} attempts"
+    )
 
 
 # ────────────────────────────────────────────────────────────────────────────
