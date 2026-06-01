@@ -185,22 +185,27 @@ class MpSpdzPartyBinary:
 # ────────────────────────────────────────────────────────────────────────────
 
 
-def find_first_instruction(tape: Any, opcode: str) -> Any | None:
-  """First instruction on `tape` whose opcode name matches `opcode` (e.g. `"ldsi"`)."""
-  for inst in tape.basicblocks[0].instructions:
-    if type(inst).__name__ == opcode:
-      return inst
-  return None
+def find_secret_writers(tape: Any) -> list[Any]:
+  """Every instruction on `tape` whose destination (`args[0]`) is a secret register.
 
-
-def find_all_instructions(tape: Any, opcode: str) -> list[Any]:
-  """All instructions on `tape` (across blocks) whose opcode name matches `opcode`."""
+  Covers anything we can splice a bump after: LDSI, ADDSI/SUBSI/MULSI,
+  ADDS/SUBS, MULS, TRIPLE, SQUARE, INPUT — whatever produces an `s`
+  register. The dst-redirection trick (see `single_variable_bump.py`)
+  works uniformly on all of them.
+  """
   return [
     inst
     for block in tape.basicblocks
     for inst in block.instructions
-    if type(inst).__name__ == opcode
+    if _writes_secret(inst)
   ]
+
+
+def _writes_secret(inst: Any) -> bool:
+  if not inst.args:
+    return False
+  dst = inst.args[0]
+  return hasattr(dst, "reg_type") and dst.reg_type == "s"
 
 
 def get_dst(inst: Any) -> Any:

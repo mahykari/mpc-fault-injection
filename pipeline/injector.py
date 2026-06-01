@@ -15,12 +15,13 @@ let the toolkit do two compiles from the same source and mutate one.
 """
 from __future__ import annotations
 
+import difflib
 from random import Random
 from typing import Any
 
 from pipeline.config import NeedsInjector
 from pipeline.gadgets import GadgetTemplate
-from pipeline.mpspdz import MpSpdzCompilerToolkit, find_all_instructions, sync_signature
+from pipeline.mpspdz import MpSpdzCompilerToolkit, find_secret_writers, sync_signature
 from pipeline.types import (
   InjectionRecord,
   MpspdzProgram,
@@ -28,7 +29,6 @@ from pipeline.types import (
   MutatedProgram,
 )
 
-ANCHOR_OPCODE = "ldsi"
 TAPE_INDEX = 0
 MAX_GADGETS = 5
 
@@ -50,9 +50,9 @@ class Injector:
     mutated = self._toolkit.compile(self._config.program_id, source.source)
     rng = Random(self._config.seed.value)
     tape = mutated.tapes[TAPE_INDEX]
-    anchors = find_all_instructions(tape, ANCHOR_OPCODE)
+    anchors = find_secret_writers(tape)
     if not anchors:
-      raise RuntimeError(f"no {ANCHOR_OPCODE} anchors on tape {TAPE_INDEX}")
+      raise RuntimeError(f"no secret-writer anchors on tape {TAPE_INDEX}")
 
     k = rng.randint(1, min(MAX_GADGETS, len(anchors)))
     picks = rng.sample(anchors, k)
@@ -76,11 +76,24 @@ class Injector:
     )
     for kind, detail in zip(record.gadget_kinds, record.details):
       print(f"  - {kind}: {detail}")
+    self._print_tape_diff(honest.program.tapes[TAPE_INDEX], mutated.tapes[TAPE_INDEX])
     return MutatedProgram(
       original=honest,
       mutated=MpspdzProgram(program=mutated),
       record=record,
     )
+
+  @staticmethod
+  def _print_tape_diff(honest_tape: Any, mutated_tape: Any) -> None:
+    honest_lines = [str(i) for b in honest_tape.basicblocks for i in b.instructions]
+    mutated_lines = [str(i) for b in mutated_tape.basicblocks for i in b.instructions]
+    diff = difflib.unified_diff(
+      honest_lines, mutated_lines,
+      fromfile="honest", tofile="mutated", lineterm="", n=1,
+    )
+    print("[injector] tape diff:")
+    for line in diff:
+      print(f"  {line}")
 
   @staticmethod
   def _check_sync_invariant(honest: Any, mutated: Any) -> None:
