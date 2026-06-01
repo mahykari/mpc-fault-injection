@@ -32,19 +32,19 @@ class Executor:
     self._toolkit.finalize_into(mutated.original.program, self._config.honest_dir)
     self._toolkit.finalize_into(mutated.mutated.program, self._config.mutated_dir)
     with Timer() as timer:
-      honest = self._party_binary.run_parties(
+      honest_run = self._party_binary.run_parties(
         self._config.program_id,
         self._config.honest_party_cwds,
         self._config.timeout_s,
       )
-      perturbed = self._party_binary.run_parties(
+      mutated_run = self._party_binary.run_parties(
         self._config.program_id,
         self._config.mutated_party_cwds,
         self._config.timeout_s,
       )
     return RunResult(
-      honest_run=honest,
-      mutated_run=perturbed,
+      honest_run=honest_run,
+      mutated_run=mutated_run,
       duration_ms=timer.elapsed_ms,
-      timed_out=any(p.exit_code == -1 for p in honest + perturbed),
+      timed_out=any(p.exit_code == -1 for p in honest_run + mutated_run),
     )
