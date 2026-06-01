@@ -94,9 +94,7 @@ class MpSpdzPartyBinary:
 
   def run_parties(
     self,
-    program_id: str,
     party_cwds: tuple[Path, ...],
-    timeout_s: float,
   ) -> tuple[PartyOutput, ...]:
     """Spawn one party per cwd, then collect each output.
 
@@ -112,19 +110,18 @@ class MpSpdzPartyBinary:
     n_parties = len(party_cwds)
     port = self._pick_port(n_parties)
     processes = [
-      self._spawn(program_id,
-                  party_id=i, n_parties=n_parties,
-                  port=port, cwd=party_cwds[i])
+      self._spawn(
+        party_id=i, n_parties=n_parties,
+        port=port, cwd=party_cwds[i])
       for i in range(n_parties)
     ]
     return tuple(
-      self._collect(proc, party_id=i, timeout_s=timeout_s)
+      self._collect(proc, party_id=i, timeout_s=self._config.timeout_s)
       for i, proc in enumerate(processes)
     )
 
   def _spawn(
     self,
-    program_id: str,
     *,
     party_id: int,
     n_parties: int,
@@ -134,10 +131,11 @@ class MpSpdzPartyBinary:
     cmd = [
       str(self._config.party_binary_path),
       "-p", str(party_id),
+      "-P", str(self._config.field_prime),
       "-N", str(n_parties),
       "-h", "localhost",
       "-pn", str(port),
-      program_id,
+      self._config.program_id,
     ]
     return subprocess.Popen(
       cmd, cwd=cwd,

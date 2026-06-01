@@ -26,6 +26,7 @@ class Config:
   protocol: Protocol
   n_parties: int
   malicious_parties: tuple[int, ...]
+  field_prime: int
   timeout_s: float
   use_patched_binary: bool = False
   expression_depth: int = 20
@@ -75,6 +76,8 @@ class NeedsGenerator(View):
   @property
   def expression_depth(self) -> int: ...
   @property
+  def field_prime(self) -> int: ...
+  @property
   def let_probability(self) -> float: ...
 
 
@@ -95,6 +98,12 @@ class NeedsCompilerToolkit(View):
 class NeedsPartyBinary(View):
   @property
   def party_binary_path(self) -> Path: ...
+  @property
+  def program_id(self) -> str: ...
+  @property
+  def field_prime(self) -> int: ...
+  @property
+  def timeout_s(self) -> float: ...
 
 
 class NeedsCompiler(View):

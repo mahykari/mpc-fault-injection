@@ -22,6 +22,8 @@ from pipeline.types import Seed
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+PRIME_MERSENNE_M127 = 2**127 - 1
+
 
 def main() -> None:
   config = Config(
@@ -30,6 +32,7 @@ def main() -> None:
     seed=Seed(value=100),
     protocol="mascot",
     n_parties=3,
+    field_prime=PRIME_MERSENNE_M127,
     malicious_parties=(0, 1),
     timeout_s=30.0,
     use_patched_binary=True,
