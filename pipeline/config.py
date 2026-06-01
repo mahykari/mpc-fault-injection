@@ -25,10 +25,11 @@ class Config:
   seed: Seed
   protocol: Protocol
   n_parties: int
-  malicious_parties: tuple[int, ...]
   field_prime: int
+  malicious_parties: tuple[int, ...]
   timeout_s: float
   use_patched_binary: bool = False
+  seeded_bug_binary: bool = False
   expression_depth: int = 20
   let_probability: float = 0.6
 
@@ -38,7 +39,12 @@ class Config:
 
   @property
   def party_binary_path(self) -> Path:
-    bin_dir = "Linux-amd64-patched" if self.use_patched_binary else "Linux-amd64"
+    if self.seeded_bug_binary:
+      bin_dir = "Linux-amd64-patched-seeded-bug"
+    elif self.use_patched_binary:
+      bin_dir = "Linux-amd64-patched"
+    else:
+      bin_dir = "Linux-amd64"
     return self.mpspdz_root / "bin" / bin_dir / f"{self.protocol}-party.x"
 
   @property
@@ -79,7 +85,6 @@ class NeedsGenerator(View):
   def field_prime(self) -> int: ...
   @property
   def let_probability(self) -> float: ...
-
 
 class NeedsInjector(View):
   @property
