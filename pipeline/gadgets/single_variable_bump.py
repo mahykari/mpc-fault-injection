@@ -1,11 +1,14 @@
-"""Small-bump and sign-flip gadgets anchored on an LDSI.
+"""Bump and sign-flip gadgets anchored on a secret-writing instruction.
 
 Both templates use the same dst-redirection trick to stay SSA-safe:
-the LDSI's destination register is routed through a fresh register,
+the anchor's destination register is routed through a fresh register,
 and the gadget re-defines the original destination from that fresh
 register. Locally:
 
-- Bump: `r := fresh + δ`, δ ∈ {+1, -1}.
+- Bump: `r := fresh + δ`. δ is sampled with a magnitude-weighted
+  distribution (small magnitudes preferred); sign uniform. Negative
+  δ wraps to `P + δ` in the field, so "near field size" is the same
+  branch as small negatives.
 - SignFlip: `r := fresh * -1` ≡ `-r mod P`.
 """
 from __future__ import annotations
@@ -26,6 +29,12 @@ from pipeline.mpspdz import (
 
 KIND_BUMP = "variable_bump"
 KIND_SIGNFLIP = "variable_signflip"
+
+# Magnitudes for the Bump gadget. Weights decay toward larger magnitudes so
+# most splices are small perturbations; the long tail is here to occasionally
+# probe big offsets.
+_BUMP_MAGNITUDES = (1, 2, 5, 10, 100, 1000, 100_000)
+_BUMP_WEIGHTS    = (40, 20, 12, 10, 8,   6,    4)
 
 
 def _redirect_through_fresh(tape: Any, anchor: Any) -> tuple[Any, Any]:
@@ -52,7 +61,7 @@ class BumpGadget:
 
   @property
   def details(self) -> str:
-    return f"addsi r, r, {self.delta:+d} after ldsi"
+    return f"addsi r, r, {self.delta:+d} after {type(self.anchor).__name__}"
 
   def apply(self, program: Any) -> None:
     tape = program.tapes[self.tape_index]
@@ -71,7 +80,7 @@ class SignFlipGadget:
 
   @property
   def details(self) -> str:
-    return "mulsi r, r, -1 after ldsi (sign flip)"
+    return f"mulsi r, r, -1 after {type(self.anchor).__name__} (sign flip)"
 
   def apply(self, program: Any) -> None:
     tape = program.tapes[self.tape_index]
@@ -85,7 +94,9 @@ class BumpTemplate:
     return KIND_BUMP
 
   def make(self, tape_index: int, anchor: Any, rng: Random) -> Gadget:
-    return BumpGadget(tape_index=tape_index, anchor=anchor, delta=rng.choice([+1, -1]))
+    magnitude = rng.choices(_BUMP_MAGNITUDES, weights=_BUMP_WEIGHTS, k=1)[0]
+    sign = rng.choice((+1, -1))
+    return BumpGadget(tape_index=tape_index, anchor=anchor, delta=sign * magnitude)
 
 
 class SignFlipTemplate:
