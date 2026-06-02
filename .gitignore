@@ -29,3 +29,9 @@ runs/
 
 # Claude Code runtime state (only .claude/agents/ is tracked)
 .claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# Local-only Claude Code notes and per-task briefings (copied into each
+# worktree via .worktreeinclude). Not for git history.
+CLAUDE.local.md
+briefings/
