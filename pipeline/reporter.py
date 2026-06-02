@@ -9,6 +9,8 @@ from __future__ import annotations
 from pipeline.config import NeedsReporter
 from pipeline.types import MutatedProgram, Report, RunResult, Verdict
 
+import dataclasses
+import json
 
 def report(
   mutated: MutatedProgram,
@@ -16,7 +18,8 @@ def report(
   verdict: Verdict,
   config: NeedsReporter,
 ) -> Report:
-  print(f"[reporter] STUB: would persist run record to {config.report_path}")
+  with open(config.report_path, "w") as f:
+    json.dump(dataclasses.asdict(run), f, indent=2)
   return Report(
     fault=mutated.record,
     verdict=verdict,

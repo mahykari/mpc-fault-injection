@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 Protocol = Literal["mascot"]
-VerdictLabel = Literal["pass", "bug", "inconclusive"]
+VerdictCategory = Literal["caught", "inert", "aborted", "honest_invalid", "bug"]
 
 
 @dataclass(frozen=True)
@@ -45,12 +45,10 @@ class MpspdzProgram:
 
 @dataclass(frozen=True)
 class InjectionRecord:
-  gadget_kind: str
   tape_index: int
-  sync_lo_pc: int
-  sync_hi_pc: int
-  party_id: int
-  details: str
+  party_ids: tuple[int, ...]
+  gadget_kinds: tuple[str, ...]
+  details: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -78,10 +76,10 @@ class RunResult:
 
 @dataclass(frozen=True)
 class Verdict:
-  label: VerdictLabel
+  category: VerdictCategory
   reason: str
   honest_output: str
-  actual_output: str
+  mutated_output: str
 
 
 @dataclass(frozen=True)

@@ -25,9 +25,13 @@ class Config:
   seed: Seed
   protocol: Protocol
   n_parties: int
-  malicious_party: int
+  field_prime: int
+  malicious_parties: tuple[int, ...]
   timeout_s: float
   use_patched_binary: bool = False
+  seeded_bug_binary: bool = False
+  expression_depth: int = 20
+  let_probability: float = 0.6
 
   @property
   def program_id(self) -> str:
@@ -35,7 +39,12 @@ class Config:
 
   @property
   def party_binary_path(self) -> Path:
-    bin_dir = "Linux-amd64-patched" if self.use_patched_binary else "Linux-amd64"
+    if self.seeded_bug_binary:
+      bin_dir = "Linux-amd64-patched-seeded-bug"
+    elif self.use_patched_binary:
+      bin_dir = "Linux-amd64-patched"
+    else:
+      bin_dir = "Linux-amd64"
     return self.mpspdz_root / "bin" / bin_dir / f"{self.protocol}-party.x"
 
   @property
@@ -56,8 +65,9 @@ class Config:
 
   @property
   def mutated_party_cwds(self) -> tuple[Path, ...]:
+    corrupt = frozenset(self.malicious_parties)
     return tuple(
-      self.mutated_dir if i == self.malicious_party else self.honest_dir
+      self.mutated_dir if i in corrupt else self.honest_dir
       for i in range(self.n_parties)
     )
 
@@ -69,13 +79,16 @@ class Config:
 class NeedsGenerator(View):
   @property
   def seed(self) -> Seed: ...
-
+  @property
+  def expression_depth(self) -> int: ...
+  @property
+  def let_probability(self) -> float: ...
 
 class NeedsInjector(View):
   @property
   def program_id(self) -> str: ...
   @property
-  def malicious_party(self) -> int: ...
+  def malicious_parties(self) -> tuple[int, ...]: ...
   @property
   def seed(self) -> Seed: ...
 
@@ -88,6 +101,12 @@ class NeedsCompilerToolkit(View):
 class NeedsPartyBinary(View):
   @property
   def party_binary_path(self) -> Path: ...
+  @property
+  def program_id(self) -> str: ...
+  @property
+  def field_prime(self) -> int: ...
+  @property
+  def timeout_s(self) -> float: ...
 
 
 class NeedsCompiler(View):

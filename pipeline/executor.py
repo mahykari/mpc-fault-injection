@@ -26,25 +26,22 @@ class Executor:
   def execute(self, mutated: MutatedProgram) -> RunResult:
     print(
       f"[executor] {self._config.program_id}: twin-run "
-      f"(gadget={mutated.record.gadget_kind}, "
-      f"corrupt party={mutated.record.party_id})"
+      f"({len(mutated.record.gadget_kinds)} gadget(s), "
+      f"corrupt parties={list(mutated.record.party_ids)})"
     )
     self._toolkit.finalize_into(mutated.original.program, self._config.honest_dir)
     self._toolkit.finalize_into(mutated.mutated.program, self._config.mutated_dir)
     with Timer() as timer:
-      honest = self._party_binary.run_parties(
-        self._config.program_id,
+      honest_run = self._party_binary.run_parties(
         self._config.honest_party_cwds,
-        self._config.timeout_s,
       )
-      perturbed = self._party_binary.run_parties(
-        self._config.program_id,
+      mutated_run = self._party_binary.run_parties(
         self._config.mutated_party_cwds,
-        self._config.timeout_s,
       )
+
     return RunResult(
-      honest_run=honest,
-      mutated_run=perturbed,
+      honest_run=honest_run,
+      mutated_run=mutated_run,
       duration_ms=timer.elapsed_ms,
-      timed_out=any(p.exit_code == -1 for p in honest + perturbed),
+      timed_out=any(p.exit_code == -1 for p in honest_run + mutated_run),
     )

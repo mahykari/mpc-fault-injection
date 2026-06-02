@@ -1,14 +1,15 @@
-"""single_variable_bump: shift one secret register by an immediate constant.
+"""Bump and sign-flip gadgets anchored on a secret-writing instruction.
 
-BLUEPRINT § "Scope: gadget insertion only" — the s ← s + c template.
-Splices one ADDSI (local-only, no `Player::` calls) into the gap,
-targeting the destination register of the first secret load on the
-chosen tape.
+Both templates use the same dst-redirection trick to stay SSA-safe:
+the anchor's destination register is routed through a fresh register,
+and the gadget re-defines the original destination from that fresh
+register. Locally:
 
-Effect on MASCOT: the corrupt party's share of s shifts by c while its
-MAC for s stays the same as in the honest run. When the protocol later
-opens any value that depends on s, the MAC equation no longer balances
-and the parties abort with `MacCheck Failure` at OPEN.
+- Bump: `r := fresh + δ`. δ is sampled with a magnitude-weighted
+  distribution (small magnitudes preferred); sign uniform. Negative
+  δ wraps to `P + δ` in the field, so "near field size" is the same
+  branch as small negatives.
+- SignFlip: `r := fresh * -1` ≡ `-r mod P`.
 """
 from __future__ import annotations
 
@@ -16,62 +17,94 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any
 
-from pipeline.gadgets.types import Gadget, GadgetTemplate, SyncGap
+from pipeline.gadgets.types import Gadget
 from pipeline.mpspdz import (
-  find_first_instruction,
   get_dst,
   insert_after,
   make_addsi,
+  make_mulsi,
   new_reg_like,
   set_dst,
 )
 
-KIND = "single_variable_bump"
+KIND_BUMP = "variable_bump"
+KIND_SIGNFLIP = "variable_signflip"
+
+# Magnitudes for the Bump gadget. Weights decay toward larger magnitudes so
+# most splices are small perturbations; the long tail is here to occasionally
+# probe big offsets.
+_BUMP_MAGNITUDES = (1, 2, 5, 10, 100, 1000, 100_000)
+_BUMP_WEIGHTS    = (40, 20, 12, 10, 8,   6,    4)
+
+
+def _redirect_through_fresh(tape: Any, anchor: Any) -> tuple[Any, Any]:
+  """Reroute `anchor`'s destination through a fresh register.
+
+  Returns `(original_dst, fresh)`. The caller inserts an instruction
+  that re-defines `original_dst` from `fresh` immediately after `anchor`.
+  """
+  original_dst = get_dst(anchor)
+  fresh = new_reg_like(tape, original_dst)
+  set_dst(anchor, fresh)
+  return original_dst, fresh
 
 
 @dataclass(frozen=True)
-class SingleVariableBumpGadget:
-  gap: SyncGap
+class BumpGadget:
+  tape_index: int
+  anchor: Any
   delta: int
 
   @property
   def kind(self) -> str:
-    return KIND
+    return KIND_BUMP
 
   @property
   def details(self) -> str:
-    return f"addsi r, r, +{self.delta} after first ldsi"
+    return f"addsi r, r, {self.delta:+d} after {type(self.anchor).__name__}"
 
   def apply(self, program: Any) -> None:
-    # MP-SPDZ uses SSA register allocation, so we can't bump in place
-    # (`addsi r, r, δ` would write `r` twice). Instead, redirect the
-    # LDSI to write a fresh register and let the bump's addsi write the
-    # original register — preserving the single-writer invariant while
-    # all downstream readers still see one definition of the original.
-    tape = program.tapes[self.gap.tape_index]
-    ldsi = find_first_instruction(tape, "ldsi")
-    if ldsi is None:
-      raise RuntimeError(f"no ldsi found on tape {self.gap.tape_index}")
-    original_dst = get_dst(ldsi)
-    fresh = new_reg_like(tape, original_dst)
-    set_dst(ldsi, fresh)
-    insert_after(tape, ldsi, make_addsi(dst=original_dst, src=fresh, imm=self.delta))
+    tape = program.tapes[self.tape_index]
+    original_dst, fresh = _redirect_through_fresh(tape, self.anchor)
+    insert_after(tape, self.anchor, make_addsi(dst=original_dst, src=fresh, imm=self.delta))
 
 
-class SingleVariableBumpTemplate:
-  """Applies wherever the gap contains a secret load to anchor on.
-
-  Today: relies on the program-start gap convention and the assumption
-  that there's an LDSI to find. A real `can_apply` will inspect the
-  gap's instruction range once sync-point analysis lands.
-  """
+@dataclass(frozen=True)
+class SignFlipGadget:
+  tape_index: int
+  anchor: Any
 
   @property
   def kind(self) -> str:
-    return KIND
+    return KIND_SIGNFLIP
 
-  def can_apply(self, gap: SyncGap) -> bool:
-    return True
+  @property
+  def details(self) -> str:
+    return f"mulsi r, r, -1 after {type(self.anchor).__name__} (sign flip)"
 
-  def sample(self, gap: SyncGap, program: Any, rng: Random) -> Gadget:
-    return SingleVariableBumpGadget(gap=gap, delta=rng.randint(1, 100))
+  def apply(self, program: Any) -> None:
+    tape = program.tapes[self.tape_index]
+    original_dst, fresh = _redirect_through_fresh(tape, self.anchor)
+    insert_after(tape, self.anchor, make_mulsi(dst=original_dst, src=fresh, imm=-1))
+
+
+class BumpTemplate:
+  @property
+  def kind(self) -> str:
+    return KIND_BUMP
+
+  def make(self, tape_index: int, anchor: Any, rng: Random) -> Gadget:
+    magnitude = rng.choices(_BUMP_MAGNITUDES, weights=_BUMP_WEIGHTS, k=1)[0]
+    sign = rng.choice((+1, -1))
+    return BumpGadget(tape_index=tape_index, anchor=anchor, delta=sign * magnitude)
+
+
+class SignFlipTemplate:
+  @property
+  def kind(self) -> str:
+    return KIND_SIGNFLIP
+
+  def make(self, tape_index: int, anchor: Any, rng: Random) -> Gadget:
+    return SignFlipGadget(tape_index=tape_index, anchor=anchor)
+
+

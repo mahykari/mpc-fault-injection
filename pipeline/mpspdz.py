@@ -10,7 +10,7 @@ and `type(inst).__name__` pokes; surface clean intent here instead.
 from __future__ import annotations
 
 import os
-import random
+import socket
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -94,9 +94,7 @@ class MpSpdzPartyBinary:
 
   def run_parties(
     self,
-    program_id: str,
     party_cwds: tuple[Path, ...],
-    timeout_s: float,
   ) -> tuple[PartyOutput, ...]:
     """Spawn one party per cwd, then collect each output.
 
@@ -110,21 +108,20 @@ class MpSpdzPartyBinary:
     on party 0, every party is already up and talking to its peers.
     """
     n_parties = len(party_cwds)
-    port = self._pick_port()
+    port = self._pick_port(n_parties)
     processes = [
-      self._spawn(program_id,
-                  party_id=i, n_parties=n_parties,
-                  port=port, cwd=party_cwds[i])
+      self._spawn(
+        party_id=i, n_parties=n_parties,
+        port=port, cwd=party_cwds[i])
       for i in range(n_parties)
     ]
     return tuple(
-      self._collect(proc, party_id=i, timeout_s=timeout_s)
+      self._collect(proc, party_id=i, timeout_s=self._config.timeout_s)
       for i, proc in enumerate(processes)
     )
 
   def _spawn(
     self,
-    program_id: str,
     *,
     party_id: int,
     n_parties: int,
@@ -134,10 +131,11 @@ class MpSpdzPartyBinary:
     cmd = [
       str(self._config.party_binary_path),
       "-p", str(party_id),
+      "-P", str(self._config.field_prime),
       "-N", str(n_parties),
       "-h", "localhost",
       "-pn", str(port),
-      program_id,
+      self._config.program_id,
     ]
     return subprocess.Popen(
       cmd, cwd=cwd,
@@ -171,8 +169,39 @@ class MpSpdzPartyBinary:
       )
 
   @staticmethod
-  def _pick_port() -> int:
-    return random.randint(20000, 60000)
+  def _pick_port(n_parties: int, attempts: int = 50) -> int:
+    """Find a base port P such that P..P+n_parties-1 are all bindable
+    with SO_REUSEADDR set — matching MP-SPDZ's ServerSocket behavior
+    (Networking/ServerSocket.cpp:40), so TIME_WAIT ports are accepted.
+    MP-SPDZ uses `port + player_id` per party (Networking/Player.h:50),
+    hence the contiguous-window requirement.
+    """
+    for _ in range(attempts):
+      with socket.socket() as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("", 0))
+        base: int = s.getsockname()[1]
+      probes: list[socket.socket] = []
+      ok = True
+      try:
+        for offset in range(n_parties):
+          t = socket.socket()
+          t.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          try:
+            t.bind(("", base + offset))
+            probes.append(t)
+          except OSError:
+            t.close()
+            ok = False
+            break
+        if ok:
+          return base
+      finally:
+        for t in probes:
+          t.close()
+    raise RuntimeError(
+      f"could not find a free {n_parties}-port window after {attempts} attempts"
+    )
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -185,12 +214,27 @@ class MpSpdzPartyBinary:
 # ────────────────────────────────────────────────────────────────────────────
 
 
-def find_first_instruction(tape: Any, opcode: str) -> Any | None:
-  """First instruction on `tape` whose opcode name matches `opcode` (e.g. `"ldsi"`)."""
-  for inst in tape.basicblocks[0].instructions:
-    if type(inst).__name__ == opcode:
-      return inst
-  return None
+def find_secret_writers(tape: Any) -> list[Any]:
+  """Every instruction on `tape` whose destination (`args[0]`) is a secret register.
+
+  Covers anything we can splice a bump after: LDSI, ADDSI/SUBSI/MULSI,
+  ADDS/SUBS, MULS, TRIPLE, SQUARE, INPUT — whatever produces an `s`
+  register. The dst-redirection trick (see `single_variable_bump.py`)
+  works uniformly on all of them.
+  """
+  return [
+    inst
+    for block in tape.basicblocks
+    for inst in block.instructions
+    if _writes_secret(inst)
+  ]
+
+
+def _writes_secret(inst: Any) -> bool:
+  if not inst.args:
+    return False
+  dst = inst.args[0]
+  return hasattr(dst, "reg_type") and dst.reg_type == "s"
 
 
 def get_dst(inst: Any) -> Any:
@@ -205,9 +249,12 @@ def set_dst(inst: Any, reg: Any) -> None:
 
 def insert_after(tape: Any, anchor: Any, new_inst: Any) -> None:
   """Splice `new_inst` immediately after `anchor` in `tape`'s instruction list."""
-  block = tape.basicblocks[0]
-  idx = block.instructions.index(anchor)
-  block.instructions.insert(idx + 1, new_inst)
+  for block in tape.basicblocks:
+    if anchor in block.instructions:
+      idx = block.instructions.index(anchor)
+      block.instructions.insert(idx + 1, new_inst)
+      return
+  raise RuntimeError(f"anchor not found on tape: {anchor}")
 
 
 def new_reg_like(tape: Any, reg: Any) -> Any:
@@ -248,3 +295,9 @@ def make_addsi(dst: Any, src: Any, imm: int) -> Any:
   """
   from Compiler.instructions import addsi  # type: ignore[import-not-found]
   return addsi(dst, src, imm, add_to_prog=False)
+
+
+def make_mulsi(dst: Any, src: Any, imm: int) -> Any:
+  """Build a `mulsi dst, src, imm` instruction (computes `dst = src * imm`)."""
+  from Compiler.instructions import mulsi
+  return mulsi(dst, src, imm, add_to_prog=False)

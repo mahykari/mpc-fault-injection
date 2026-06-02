@@ -24,9 +24,9 @@ from pipeline.types import CircilProgram
 FIELD_MODULO = 2**31 - 1
 
 
-def _fuzzer_config() -> FuzzerConfig:
+def _fuzzer_config(config: NeedsGenerator) -> FuzzerConfig:
   return FuzzerConfig(
-    max_expression_depth=10,
+    max_expression_depth=config.expression_depth,
     min_assertions=0, max_assertions=0,
     min_circuit_input_signals=2, max_circuit_input_signals=10,
     min_circuit_output_signals=1, max_circuit_output_signals=5,
@@ -38,14 +38,14 @@ def _fuzzer_config() -> FuzzerConfig:
     allowed_generic_concrete_types=[IRType.Field],
     enable_fixed_size_array=False,
     max_lambda_depth=0,
-    probability_weight_let=0.3,
+    probability_weight_let=config.let_probability,
     custom_functions=[Builtins.MUL, Builtins.SUB, Builtins.ADD],
   )
 
 
 def generate_program(config: NeedsGenerator) -> CircilProgram:
   rng = Random(config.seed.value)
-  circuit = SimpleCircuitFuzzer(FIELD_MODULO, rng, _fuzzer_config()).run()
+  circuit = SimpleCircuitFuzzer(FIELD_MODULO, rng, _fuzzer_config(config)).run()
   print(
     f"[generator] CircIL circuit (seed={config.seed.value}, "
     f"inputs={len(circuit.inputs)}, "

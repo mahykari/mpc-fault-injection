@@ -41,9 +41,19 @@ RUN curl -fsSL -o mp-spdz.tar.xz \
 
 WORKDIR /src/mp-spdz-0.4.2
 
-# Apply our patches in numbered order.
-COPY patches/mpspdz/*.patch /patches/
-RUN for p in /patches/*.patch; do echo "Applying $(basename $p)"; patch -p1 < "$p"; done
+# Apply our patches in numbered order. The base patch set always applies;
+# the seeded-bug overlay (extra patches) only applies when APPLY_SEEDED_BUG=1.
+ARG APPLY_SEEDED_BUG=0
+COPY patches/mpspdz/*.patch /patches/base/
+COPY patches/mpspdz-seeded-bug/ /patches/seeded-bug/
+RUN for p in /patches/base/*.patch; do \
+        echo "Applying $(basename $p)"; patch -p1 < "$p"; \
+    done && \
+    if [ "$APPLY_SEEDED_BUG" = "1" ]; then \
+      for p in /patches/seeded-bug/*.patch; do \
+        echo "Applying (seeded-bug) $(basename $p)"; patch -p1 < "$p"; \
+      done; \
+    fi
 
 # Match upstream Dockerfile's CONFIG.mine defaults.
 RUN echo "CXX = clang++-11"                                              >> CONFIG.mine \

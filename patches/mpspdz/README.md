@@ -8,6 +8,17 @@ in the C++ binary live here — Python-side adapter quirks stay in `pipeline/`.
 |---|---|---|
 | 0001 | `Processor/Machine.hpp` :: `check_program` | Disable startup bytecode-fingerprint check so corrupt parties can load mutated `.bc`. Plumbing, not malicious security. See `notes/mpspdz-patching.md`. |
 
+## Seeded-bug overlay (`patches/mpspdz-seeded-bug/`)
+
+Overlay applied on top of this base set when `./docker/build.sh seeded-bug`
+is invoked; output lands in `MP-SPDZ/bin/Linux-amd64-patched-seeded-bug/`.
+Used to verify the harness's Oracle can actually detect silent divergence
+(intentionally violates the discipline below).
+
+| # | Target | Why |
+|---|---|---|
+| 0002 | `Protocols/MAC_Check.hpp` :: `mac_fail_remove` | No-op the MAC-fail throw site so MASCOT silently accepts bumped shares. The harness should see most runs flip from `caught` → `bug`. |
+
 ## Adding a new patch
 
 1. Re-extract the tarball to a temp dir:
