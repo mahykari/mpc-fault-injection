@@ -2,7 +2,7 @@
 # from MP-SPDZ v0.4.2 source. Builds inside ubuntu:22.04 because Ubuntu
 # 26.04 host has Boost 1.90, which is incompatible with libOTe's ASIO usage.
 #
-# Driven by docker/build.sh, which extracts the binary into
+# Driven by containers/build.sh, which extracts the binary into
 # MP-SPDZ/bin/Linux-amd64-patched/ on the host.
 
 FROM ubuntu:22.04 AS builder
@@ -76,7 +76,43 @@ RUN make -j"$(nproc)" static/mascot-party.x
 
 RUN ls -la static/mascot-party.x && file static/mascot-party.x
 
-# Tiny final stage so `docker build --output type=local,dest=...` (or
-# `docker create` + `docker cp`) pulls out just the binary.
-FROM scratch AS export
-COPY --from=builder /src/mp-spdz-0.4.2/static/mascot-party.x /mascot-party.x
+# ─────────────────────────────────────────────────────────────────────────────
+# runtime: the full fuzz pipeline. Layers uv + this repo onto `builder`, which
+# already carries the MP-SPDZ Compiler module and the freshly-built party
+# binary — no second MP-SPDZ fetch. Entrypoint runs main.py; the host launcher
+# overrides INSTANCE_ID / SEEDS per instance (see containers/run-parallel.sh).
+# ─────────────────────────────────────────────────────────────────────────────
+FROM builder AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Shape an MP-SPDZ root that Config's paths resolve against: Compiler/ is
+# already at /src/mp-spdz-0.4.2; expose the static binary where
+# `Config.party_binary_path` (Linux-amd64-patched, use_patched_binary=True)
+# looks for it.
+RUN mkdir -p /src/mp-spdz-0.4.2/bin/Linux-amd64-patched \
+ && ln -s /src/mp-spdz-0.4.2/static/mascot-party.x \
+          /src/mp-spdz-0.4.2/bin/Linux-amd64-patched/mascot-party.x
+
+WORKDIR /app
+RUN ln -s /src/mp-spdz-0.4.2 /app/MP-SPDZ && mkdir -p /app/runs
+
+# python-circil is a private repo; clone it at the pinned commit using SSH-agent
+# forwarding. Requires `podman build --ssh default` with the key loaded.
+ARG CIRCIL_REF=674504187083701857b6fb4d2741c316aa5ce451
+RUN --mount=type=ssh \
+    mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts \
+ && git clone git@github.com:Rigorous-Software-Engineering/python-circil.git \
+      /app/python-circil \
+ && git -C /app/python-circil checkout "$CIRCIL_REF"
+
+COPY pyproject.toml uv.lock main.py /app/
+COPY pipeline/ /app/pipeline/
+RUN uv sync --frozen
+
+ENTRYPOINT ["uv", "run", "python", "main.py"]
