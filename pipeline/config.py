@@ -11,6 +11,8 @@ documents the per-component slice.
 """
 from __future__ import annotations
 
+import dataclasses
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol as View
@@ -32,10 +34,11 @@ class Config:
   seeded_bug_binary: bool = False
   expression_depth: int = 20
   let_probability: float = 0.6
+  instance_id: int = 0
 
   @property
   def program_id(self) -> str:
-    return f"stub-{self.seed.value:04d}"
+    return f"i{self.instance_id:02d}-case-{self.seed.value:04d}"
 
   @property
   def party_binary_path(self) -> Path:
@@ -74,6 +77,30 @@ class Config:
   @property
   def report_path(self) -> Path:
     return self.run_dir / "report.json"
+
+
+# Program-derived (paths) or per-run (seed/instance); not user-tunable.
+_PROTECTED_FIELDS = frozenset({"mpspdz_root", "runs_root", "seed", "instance_id"})
+
+
+def load_overrides(defaults: Config, path: Path) -> Config:
+  """Build a Config by overlaying a partial JSON dict onto `defaults`.
+
+  Keys absent from the file keep their default. Protected and unknown keys
+  raise rather than pass silently. `malicious_parties` arrives as a JSON
+  array and is coerced to the tuple Config expects.
+  """
+  with open(path) as f:
+    overrides = json.load(f)
+  field_names = {f.name for f in dataclasses.fields(Config)}
+  for key in overrides:
+    if key in _PROTECTED_FIELDS:
+      raise ValueError(f"config key {key!r} is program-controlled, not overridable")
+    if key not in field_names:
+      raise ValueError(f"unknown config key {key!r}")
+  if "malicious_parties" in overrides:
+    overrides["malicious_parties"] = tuple(overrides["malicious_parties"])
+  return dataclasses.replace(defaults, **overrides)
 
 
 class NeedsGenerator(View):

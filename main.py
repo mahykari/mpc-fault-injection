@@ -1,20 +1,20 @@
-"""Pipeline entrypoint: fuzz loop over N seeds, summarize verdicts.
+"""Pipeline entrypoint, for the host and inside a container.
 
-Per-run output of the pipeline components is suppressed; this script
-only prints one line per run plus a final summary.
-
-`uv run python main.py` must always succeed (BLUEPRINT invariant).
+`uv run python main.py` runs (BLUEPRINT invariant): with no env set it
+runs seeds 0..N_RUNS-1 as instance 0 with DEFAULTS. Env overrides:
+  INSTANCE_ID  instance index; namespaces run artifacts   (default 0)
+  SEEDS        comma-separated seeds to run               (default range(N_RUNS))
+  CONFIG       path to a partial JSON config overlaid on DEFAULTS (default none)
 """
 from __future__ import annotations
 
-import contextlib
-import dataclasses
-import io
-import typing
+import os
 from pathlib import Path
 
-from pipeline import Config, run_pipeline
-from pipeline.types import Seed, VerdictCategory
+from pipeline import Config
+from pipeline.campaign import run_campaign
+from pipeline.config import load_overrides
+from pipeline.types import Seed
 
 REPO_ROOT = Path(__file__).resolve().parent
 MPSPDZ_ROOT = REPO_ROOT / "MP-SPDZ"
@@ -24,7 +24,7 @@ N_RUNS = 200
 
 PRIME_MERSENNE_M127 = 2**127 - 1
 
-BASE_CONFIG = Config(
+DEFAULTS = Config(
   mpspdz_root=MPSPDZ_ROOT,
   runs_root=RUNS_ROOT,
   seed=Seed(value=0),
@@ -38,41 +38,24 @@ BASE_CONFIG = Config(
 )
 
 
+def _seeds() -> list[int]:
+  raw = os.environ.get("SEEDS", "").strip()
+  if raw:
+    return [int(s) for s in raw.split(",")]
+  return list(range(N_RUNS))
+
+
+def _base_config() -> Config:
+  path = os.environ.get("CONFIG")
+  return load_overrides(DEFAULTS, Path(path)) if path else DEFAULTS
+
+
 def main() -> None:
-  counts: dict[str, int] = {c: 0 for c in typing.get_args(VerdictCategory)}
-  counts["error"] = 0
-  bugs: list[int] = []
-  errors: list[tuple[int, str]] = []
-
-  for seed in range(N_RUNS):
-    config = dataclasses.replace(BASE_CONFIG, seed=Seed(value=seed))
-    # Silence per-run pipeline prints (generator/translator/injector/...) so
-    # only this loop's one-line-per-run summary reaches the terminal.
-    # Subprocess stdout/stderr is unaffected — already collected via Popen.PIPE.
-    sink = io.StringIO()
-    try:
-      with contextlib.redirect_stdout(sink):
-        report = run_pipeline(config)
-    except Exception as exc:
-      counts["error"] += 1
-      errors.append((seed, repr(exc)))
-      print(f"[seed={seed:04d}] ERROR — {exc!s}")
-      continue
-
-    category = report.verdict.category
-    counts[category] += 1
-    if category == "bug":
-      bugs.append(seed)
-    print(f"[seed={seed:04d}] {category} — {report.verdict.reason}")
-
-  print()
-  print(f"=== Summary ({N_RUNS} runs) ===")
-  for k, v in counts.items():
-    print(f"  {k:14s}: {v}")
-  if bugs:
-    print(f"  bug seeds     : {bugs}")
-  if errors:
-    print(f"  error sample  : {errors[:5]}")
+  run_campaign(
+    _base_config(),
+    _seeds(),
+    instance_id=int(os.environ.get("INSTANCE_ID", "0")),
+  )
 
 
 if __name__ == "__main__":
