@@ -19,11 +19,9 @@ VARIANT="${1:-patched}"
 if [ "$VARIANT" = "pipeline" ]; then
   IMAGE_TAG="mpspdz-pipeline:v0.4.2"
   echo "==> Building $IMAGE_TAG (runtime stage)"
-  # --ssh default forwards the host SSH agent for the private python-circil clone.
   podman build \
     --file "$CONTAINERFILE" \
     --target runtime \
-    --ssh default \
     --tag "$IMAGE_TAG" \
     .
   echo "==> Done: $IMAGE_TAG"

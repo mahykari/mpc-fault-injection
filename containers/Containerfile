@@ -84,11 +84,6 @@ RUN ls -la static/mascot-party.x && file static/mascot-party.x
 # ─────────────────────────────────────────────────────────────────────────────
 FROM builder AS runtime
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      openssh-client \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Shape an MP-SPDZ root that Config's paths resolve against: Compiler/ is
@@ -102,14 +97,10 @@ RUN mkdir -p /src/mp-spdz-0.4.2/bin/Linux-amd64-patched \
 WORKDIR /app
 RUN ln -s /src/mp-spdz-0.4.2 /app/MP-SPDZ && mkdir -p /app/runs
 
-# python-circil is a private repo; clone it at the pinned commit using SSH-agent
-# forwarding. Requires `podman build --ssh default` with the key loaded.
-ARG CIRCIL_REF=674504187083701857b6fb4d2741c316aa5ce451
-RUN --mount=type=ssh \
-    mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts \
- && git clone git@github.com:Rigorous-Software-Engineering/python-circil.git \
-      /app/python-circil \
- && git -C /app/python-circil checkout "$CIRCIL_REF"
+# python-circil is a sys.path dependency (not pip-installed). Copy the clone
+# from the build context — the deploy already carries it — so the build needs
+# no GitHub access / SSH-agent forwarding.
+COPY python-circil/ /app/python-circil/
 
 COPY pyproject.toml uv.lock main.py /app/
 COPY pipeline/ /app/pipeline/
