@@ -1,10 +1,10 @@
-"""Run a set of seeds through the pipeline and summarise the verdicts.
+"""Run one instance: a set of seeds through the pipeline, summarised.
 
-The caller picks the seeds; this loop runs them. `instance_id` feeds
-`Config.program_id` so artifacts from parallel instances don't collide
-under a shared `runs/`. The Reporter persists each run; here we print
-one line per run plus a closing summary, and suppress per-run pipeline
-output.
+The puppeteer (launch.py) spawns instances; each instance runs this loop
+over its own seed slice. `instance_id` feeds `Config.program_id` so
+artifacts from parallel instances don't collide under a shared `runs/`.
+The Reporter persists each run; here we print one line per run plus a
+closing summary, and suppress per-run pipeline output.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from pipeline import Config, run_pipeline
 from pipeline.types import Seed, VerdictCategory
 
 
-def run_campaign(
+def run_instance(
   base_config: Config,
   seeds: Iterable[int],
   instance_id: int = 0,

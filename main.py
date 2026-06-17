@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline import Config
-from pipeline.campaign import run_campaign
+from pipeline.instance import run_instance
 from pipeline.config import apply_overrides
 from pipeline.types import Seed
 
@@ -50,7 +50,7 @@ def main() -> None:
   spec = _spec()
   seeds = spec.pop("seeds", list(range(N_RUNS)))
   instance_id = spec.pop("instance_id", 0)
-  run_campaign(apply_overrides(DEFAULTS, spec), seeds, instance_id)
+  run_instance(apply_overrides(DEFAULTS, spec), seeds, instance_id)
 
 
 if __name__ == "__main__":
