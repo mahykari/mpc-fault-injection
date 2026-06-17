@@ -66,7 +66,7 @@ class Injector:
     self._check_sync_invariant(honest.program, mutated)
     record = InjectionRecord(
       tape_index=TAPE_INDEX,
-      party_ids=self._config.malicious_parties,
+      party_ids=tuple(self._config.malicious_parties),
       gadget_kinds=tuple(g.kind for g in gadgets),
       details=tuple(g.details for g in gadgets),
     )

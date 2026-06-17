@@ -1,20 +1,23 @@
-"""Pipeline entrypoint: fuzz loop over N seeds, summarize verdicts.
+"""Pipeline entrypoint, for the host and inside a container.
 
-Per-run output of the pipeline components is suppressed; this script
-only prints one line per run plus a final summary.
-
-`uv run python main.py` must always succeed (BLUEPRINT invariant).
+`uv run python main.py` runs (BLUEPRINT invariant). With no env it runs
+seeds 0..N_RUNS-1 as instance 0 with DEFAULTS. The `CONFIG` env points at a
+JSON run spec (written per-instance by the launcher) carrying everything:
+  seeds        list of seeds this run executes      (default range(N_RUNS))
+  instance_id  namespaces run artifacts             (default 0)
+  <other keys> Config-field overrides onto DEFAULTS (e.g. expression_depth)
 """
 from __future__ import annotations
 
-import contextlib
-import dataclasses
-import io
-import typing
+import json
+import os
 from pathlib import Path
+from typing import Any
 
-from pipeline import Config, run_pipeline
-from pipeline.types import Seed, VerdictCategory
+from pipeline import Config
+from pipeline.instance import run_instance
+from pipeline.config import apply_overrides
+from pipeline.types import Seed
 
 REPO_ROOT = Path(__file__).resolve().parent
 MPSPDZ_ROOT = REPO_ROOT / "MP-SPDZ"
@@ -24,55 +27,30 @@ N_RUNS = 200
 
 PRIME_MERSENNE_M127 = 2**127 - 1
 
-BASE_CONFIG = Config(
+DEFAULTS = Config(
   mpspdz_root=MPSPDZ_ROOT,
   runs_root=RUNS_ROOT,
   seed=Seed(value=0),
   protocol="mascot",
   n_parties=3,
   field_prime=PRIME_MERSENNE_M127,
-  malicious_parties=(0, 1),
+  malicious_parties=[0, 1],
   timeout_s=30.0,
   use_patched_binary=True,
   seeded_bug_binary=False,
 )
 
 
+def _spec() -> dict[str, Any]:
+  path = os.environ.get("CONFIG")
+  return json.loads(Path(path).read_text()) if path else {}
+
+
 def main() -> None:
-  counts: dict[str, int] = {c: 0 for c in typing.get_args(VerdictCategory)}
-  counts["error"] = 0
-  bugs: list[int] = []
-  errors: list[tuple[int, str]] = []
-
-  for seed in range(N_RUNS):
-    config = dataclasses.replace(BASE_CONFIG, seed=Seed(value=seed))
-    # Silence per-run pipeline prints (generator/translator/injector/...) so
-    # only this loop's one-line-per-run summary reaches the terminal.
-    # Subprocess stdout/stderr is unaffected — already collected via Popen.PIPE.
-    sink = io.StringIO()
-    try:
-      with contextlib.redirect_stdout(sink):
-        report = run_pipeline(config)
-    except Exception as exc:
-      counts["error"] += 1
-      errors.append((seed, repr(exc)))
-      print(f"[seed={seed:04d}] ERROR — {exc!s}")
-      continue
-
-    category = report.verdict.category
-    counts[category] += 1
-    if category == "bug":
-      bugs.append(seed)
-    print(f"[seed={seed:04d}] {category} — {report.verdict.reason}")
-
-  print()
-  print(f"=== Summary ({N_RUNS} runs) ===")
-  for k, v in counts.items():
-    print(f"  {k:14s}: {v}")
-  if bugs:
-    print(f"  bug seeds     : {bugs}")
-  if errors:
-    print(f"  error sample  : {errors[:5]}")
+  spec = _spec()
+  seeds = spec.pop("seeds", list(range(N_RUNS)))
+  instance_id = spec.pop("instance_id", 0)
+  run_instance(apply_overrides(DEFAULTS, spec), seeds, instance_id)
 
 
 if __name__ == "__main__":
