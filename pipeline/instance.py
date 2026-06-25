@@ -15,6 +15,7 @@ import typing
 from typing import Iterable
 
 from pipeline import Config, run_pipeline
+from pipeline.timing import Timer
 from pipeline.types import Seed, VerdictCategory
 
 
@@ -27,27 +28,30 @@ def run_instance(
   counts = {c: 0 for c in typing.get_args(VerdictCategory)}
   counts["error"] = 0
   bug_seeds: list[int] = []
+  wall_ms: list[int] = []
 
   for seed in seeds:
     config = dataclasses.replace(
       base_config, seed=Seed(value=seed), instance_id=instance_id)
     sink = io.StringIO()
     try:
-      with contextlib.redirect_stdout(sink):
+      with Timer() as timer, contextlib.redirect_stdout(sink):
         report = run_pipeline(config)
     except Exception as exc:
       counts["error"] += 1
       print(f"[i{instance_id:02d} seed={seed:04d}] ERROR — {exc!s}")
       continue
+    wall_ms.append(timer.elapsed_ms)
     category = report.verdict.category
     counts[category] += 1
     if category == "bug":
       bug_seeds.append(seed)
     print(
       f"[i{instance_id:02d} seed={seed:04d}] "
-      f"{category} — {report.verdict.reason}")
+      f"{category} — {report.verdict.reason} "
+      f"({timer.elapsed_ms} ms)")
 
-  _print_summary(instance_id, len(seeds), counts, bug_seeds)
+  _print_summary(instance_id, len(seeds), counts, bug_seeds, wall_ms)
 
 
 def _print_summary(
@@ -55,6 +59,7 @@ def _print_summary(
   n_runs: int,
   counts: dict[str, int],
   bug_seeds: list[int],
+  wall_ms: list[int],
 ) -> None:
   print()
   print(f"=== instance {instance_id:02d} summary ({n_runs} runs) ===")
@@ -62,3 +67,7 @@ def _print_summary(
     print(f"  {category:14s}: {count}")
   if bug_seeds:
     print(f"  bug seeds     : {bug_seeds}")
+  if wall_ms:
+    total_s = sum(wall_ms) / 1000
+    mean_ms = sum(wall_ms) / len(wall_ms)
+    print(f"  wall          : {total_s:.1f}s total, {mean_ms:.0f} ms/run mean")

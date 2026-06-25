@@ -35,6 +35,7 @@ def parse_args() -> argparse.Namespace:
   p.add_argument("--cpus", help="podman --cpus per instance, e.g. 2")
   p.add_argument("--memory", help="podman --memory per instance, e.g. 4g")
   p.add_argument("--config", help="JSON of tunables, merged into every instance's spec")
+  p.add_argument("--disabled-sites", help="comma-separated site IDs to disable MAC staging")
   return p.parse_args()
 
 
@@ -57,18 +58,22 @@ def spawn(
   image: str,
   cpus: str | None = None,
   memory: str | None = None,
+  disabled_sites: str | None = None,
 ) -> "subprocess.Popen[bytes]":
   opts = []
   if cpus is not None:
     opts += ["--cpus", cpus]
   if memory is not None:
     opts += ["--memory", memory]
+  env_opts = ["-e", f"CONFIG={CONFIG_MOUNT}"]
+  if disabled_sites:
+    env_opts += ["-e", f"MPSPDZ_DISABLED_SITES={disabled_sites}"]
   return subprocess.Popen([
     "podman", "run", "--rm",
     "--name", f"fuzz-i{instance_id:02d}",
     *opts,
     "-v", f"{config}:{CONFIG_MOUNT}:ro",
-    "-e", f"CONFIG={CONFIG_MOUNT}",
+    *env_opts,
     "-v", f"{RUNS_DIR}:/app/runs",
     image,
   ])
@@ -87,7 +92,7 @@ def main() -> None:
     spec = {**tunables, "seeds": seeds, "instance_id": i, "expression_depth": depths[i]}
     spec_path = specs_dir / f"i{i:02d}.json"
     spec_path.write_text(json.dumps(spec))
-    procs.append(spawn(i, spec_path, args.image, args.cpus, args.memory))
+    procs.append(spawn(i, spec_path, args.image, args.cpus, args.memory, args.disabled_sites))
   codes = [(i, p.wait()) for i, p in enumerate(procs)]
 
   print()

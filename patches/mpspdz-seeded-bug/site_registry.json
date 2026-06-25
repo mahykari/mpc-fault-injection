@@ -1,0 +1,14 @@
+{
+  "subprocessor_check": {
+    "file": "Processor/Processor.hpp",
+    "line": 175
+  },
+  "beaver_check": {
+    "file": "Protocols/Beaver.hpp",
+    "line": 105
+  },
+  "private_output_check": {
+    "file": "Processor/PrivateOutput.hpp",
+    "line": 20
+  }
+}

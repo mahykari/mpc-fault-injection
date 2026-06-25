@@ -1,0 +1,67 @@
+Skip Check() calls for seeded-bug testing.
+
+Sites: subprocessor_check, beaver_check, private_output_check
+Usage: MPSPDZ_DISABLED_SITES=subprocessor_check ./mascot-party.x ...
+
+--- a/Processor/Processor.hpp
++++ b/Processor/Processor.hpp
+@@ -15,6 +15,7 @@
+ 
+ #include <sodium.h>
+ #include <string>
++#include "disabled_sites_iface.h"
+ 
+ template <class T>
+ SubProcessor<T>::SubProcessor(ArithmeticProcessor& Proc, typename T::MAC_Check& MC,
+@@ -172,7 +173,8 @@
+   // protocol check before last MAC check
+   protocol.check();
+   // MACCheck
+-  MC.Check(P);
++  if (!MPSPDZ_SITE_DISABLED("subprocessor_check"))
++    MC.Check(P);
+ }
+ 
+ template<class sint, class sgf2n>
+
+--- a/Protocols/Beaver.hpp
++++ b/Protocols/Beaver.hpp
+@@ -11,6 +11,7 @@
+ #include "Replicated.hpp"
+ 
+ #include <array>
++#include "disabled_sites_iface.h"
+ 
+ template<class T>
+ typename T::Protocol Beaver<T>::branch()
+@@ -102,7 +103,8 @@
+ void Beaver<T>::check()
+ {
+     assert(MC);
+-    MC->Check(P);
++    if (!MPSPDZ_SITE_DISABLED("beaver_check"))
++      MC->Check(P);
+ }
+ 
+ #endif
+
+--- a/Processor/PrivateOutput.hpp
++++ b/Processor/PrivateOutput.hpp
+@@ -5,6 +5,7 @@
+ 
+ #include "PrivateOutput.h"
+ #include "Processor.h"
++#include "disabled_sites_iface.h"
+ 
+ template<class T>
+ PrivateOutput<T>::PrivateOutput(SubProcessor<T>& proc) :
+@@ -17,7 +18,8 @@
+ template<class T>
+ PrivateOutput<T>::~PrivateOutput()
+ {
+-    MC.Check(proc.P);
++    if (!MPSPDZ_SITE_DISABLED("private_output_check"))
++      MC.Check(proc.P);
+ }
+ 
+ template<class T>
