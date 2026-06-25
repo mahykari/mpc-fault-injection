@@ -53,6 +53,9 @@ RUN for p in /patches/base/*.patch; do \
       for p in /patches/seeded-bug/*.patch; do \
         echo "Applying (seeded-bug) $(basename $p)"; patch -p1 < "$p"; \
       done; \
+      if [ -f /patches/seeded-bug/disabled_sites_iface.h ]; then \
+        cp /patches/seeded-bug/disabled_sites_iface.h .; \
+      fi; \
     fi
 
 # Match upstream Dockerfile's CONFIG.mine defaults.

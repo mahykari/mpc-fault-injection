@@ -3,7 +3,8 @@
 #
 #   ./containers/build.sh             # base patches → binary into MP-SPDZ/bin/Linux-amd64-patched/
 #   ./containers/build.sh seeded-bug  # base + seeded-bug overlay → Linux-amd64-patched-seeded-bug/
-#   ./containers/build.sh pipeline    # full fuzz-pipeline image (runtime stage); needs SSH agent
+#   ./containers/build.sh pipeline    # fuzz-pipeline image (runtime stage, base patches)
+#   ./containers/build.sh pipeline-seeded-bug  # fuzz-pipeline image with seeded-bug patches
 #
 # The binary variants build the `builder` stage and extract static/mascot-party.x
 # to the host. `pipeline` builds the `runtime` stage into a runnable image.
@@ -16,13 +17,20 @@ cd "$REPO_ROOT"
 CONTAINERFILE="containers/Containerfile"
 VARIANT="${1:-patched}"
 
-if [ "$VARIANT" = "pipeline" ]; then
-  IMAGE_TAG="mpspdz-pipeline:v0.4.2"
-  echo "==> Building $IMAGE_TAG (runtime stage)"
+if [ "$VARIANT" = "pipeline" ] || [ "$VARIANT" = "pipeline-seeded-bug" ]; then
+  if [ "$VARIANT" = "pipeline-seeded-bug" ]; then
+    IMAGE_TAG="mpspdz-pipeline-seeded-bug:v0.4.2"
+    APPLY_SEEDED_BUG=1
+  else
+    IMAGE_TAG="mpspdz-pipeline:v0.4.2"
+    APPLY_SEEDED_BUG=0
+  fi
+  echo "==> Building $IMAGE_TAG (runtime stage, APPLY_SEEDED_BUG=$APPLY_SEEDED_BUG)"
   podman build \
     --file "$CONTAINERFILE" \
     --target runtime \
     --tag "$IMAGE_TAG" \
+    --build-arg APPLY_SEEDED_BUG="$APPLY_SEEDED_BUG" \
     .
   echo "==> Done: $IMAGE_TAG"
   exit 0
