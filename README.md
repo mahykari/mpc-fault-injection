@@ -87,7 +87,7 @@ CLAUDE.md             — instructions for Claude Code
 main.py               — pipeline entrypoint (`uv run python main.py`)
 pipeline/             — typed pipeline components (Generator … Reporter), Config, MP-SPDZ adapters
 patches/mpspdz/       — C++ source patches applied to MP-SPDZ at build time
-docker/               — Dockerfile + build.sh for the patched mascot-party.x
+containers/           — Containerfile + build.sh + launch.py (patched binary, parallel runs)
 notes/                — protocol analysis, MP-SPDZ architecture map, patching notes
 exploration/          — scratch scripts for poking at MP-SPDZ
 MP-SPDZ/              — gitignored: pre-built v0.4.2 distribution + Compiler/ Python module

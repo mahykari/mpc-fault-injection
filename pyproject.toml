@@ -9,6 +9,10 @@ dependencies = []
 dev = [
     "mypy>=1.13",
 ]
+tools = [
+    "tree-sitter>=0.24",
+    "tree-sitter-cpp>=0.23",
+]
 
 [tool.mypy]
 strict = true

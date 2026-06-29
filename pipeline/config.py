@@ -11,9 +11,10 @@ documents the per-component slice.
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol as View
+from typing import Any, Protocol as View
 
 from pipeline.types import Protocol, Seed
 
@@ -26,16 +27,17 @@ class Config:
   protocol: Protocol
   n_parties: int
   field_prime: int
-  malicious_parties: tuple[int, ...]
+  malicious_parties: list[int]
   timeout_s: float
   use_patched_binary: bool = False
   seeded_bug_binary: bool = False
   expression_depth: int = 20
   let_probability: float = 0.6
+  instance_id: int = 0
 
   @property
   def program_id(self) -> str:
-    return f"stub-{self.seed.value:04d}"
+    return f"i{self.instance_id:02d}-case-{self.seed.value:04d}"
 
   @property
   def party_binary_path(self) -> Path:
@@ -76,6 +78,26 @@ class Config:
     return self.run_dir / "report.json"
 
 
+# Program-derived (paths) or per-run (seed); not user-tunable.
+_PROTECTED_FIELDS = frozenset({"mpspdz_root", "runs_root", "seed"})
+
+
+def apply_overrides(defaults: Config, overrides: dict[str, Any]) -> Config:
+  """Overlay a partial dict of Config-field overrides onto `defaults`.
+
+  Keys absent keep their default; protected and unknown keys raise rather
+  than pass silently. Campaign-level keys (`seeds`, `instance_id`) are the
+  caller's to strip before this — they aren't Config fields.
+  """
+  field_names = {f.name for f in dataclasses.fields(Config)}
+  for key in overrides:
+    if key in _PROTECTED_FIELDS:
+      raise ValueError(f"config key {key!r} is program-controlled, not overridable")
+    if key not in field_names:
+      raise ValueError(f"unknown config key {key!r}")
+  return dataclasses.replace(defaults, **overrides)
+
+
 class NeedsGenerator(View):
   @property
   def seed(self) -> Seed: ...
@@ -88,7 +110,7 @@ class NeedsInjector(View):
   @property
   def program_id(self) -> str: ...
   @property
-  def malicious_parties(self) -> tuple[int, ...]: ...
+  def malicious_parties(self) -> list[int]: ...
   @property
   def seed(self) -> Seed: ...
 

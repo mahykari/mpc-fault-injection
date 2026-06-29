@@ -37,7 +37,7 @@ def run_seed(seed: int) -> None:
     protocol="mascot",
     n_parties=3,
     field_prime=PRIME_MERSENNE_M127,
-    malicious_parties=(0, 1),
+    malicious_parties=[0, 1],
     timeout_s=30.0,
     use_patched_binary=True,
   )
