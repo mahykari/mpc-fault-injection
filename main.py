@@ -1,8 +1,9 @@
 """Pipeline entrypoint, for the host and inside a container.
 
 Subcommands:
-  run        Execute the fuzzing pipeline (default if no subcommand given)
-  aggregate  Roll up runs/*/report.json into runs/results.db
+  run          Execute the fuzzing pipeline (default if no subcommand given)
+  aggregate    Roll up runs/*/report.json into runs/results.db
+  rerun-inert  Re-run inert cases under semi-honest to classify them
 
 `uv run python main.py` runs (BLUEPRINT invariant). With no env it runs
 seeds 0..N_RUNS-1 as instance 0 with DEFAULTS. The `CONFIG` env points at a
@@ -14,6 +15,7 @@ JSON run spec (written per-instance by the launcher) carrying everything:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import re
@@ -24,6 +26,7 @@ from typing import Any
 from pipeline import Config
 from pipeline.instance import run_instance
 from pipeline.config import apply_overrides
+from pipeline.mpspdz import MpSpdzPartyBinary
 from pipeline.types import Seed
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -135,6 +138,109 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     print(f"  {v}: {n}")
 
 
+def cmd_rerun_inert(args: argparse.Namespace) -> None:
+  """Re-run inert mutations under semi-honest protocol to classify them.
+
+  Inert under malicious = either truly inert (no semantic change) or
+  active-but-masked (MAC checks caught the deviation). Re-running
+  without MAC checks reveals which is which.
+  """
+  conn = sqlite3.connect(DB_PATH)
+  cur = conn.execute(
+    "SELECT id FROM runs WHERE verdict='inert' AND retired_at IS NULL"
+  )
+  inert_ids = [row[0] for row in cur.fetchall()]
+  conn.close()
+
+  if not inert_ids:
+    print("no inert runs to rerun")
+    return
+
+  if args.limit:
+    inert_ids = inert_ids[:args.limit]
+
+  print(f"re-running {len(inert_ids)} inert case(s) under semi-party.x")
+
+  active_but_masked = 0
+  truly_inert = 0
+  errors = 0
+
+  for run_id in inert_ids:
+    result = _rerun_as_semi(run_id)
+    if result == "active":
+      active_but_masked += 1
+      print(f"  {run_id}: active-but-masked")
+    elif result == "inert":
+      truly_inert += 1
+      print(f"  {run_id}: truly-inert")
+    else:
+      errors += 1
+      print(f"  {run_id}: error ({result})")
+
+  print()
+  print(f"active-but-masked: {active_but_masked}")
+  print(f"truly-inert: {truly_inert}")
+  if errors:
+    print(f"errors: {errors}")
+
+
+def _rerun_as_semi(run_id: str) -> str:
+  """Re-run a single case under semi-party.x, return classification."""
+  run_dir = RUNS_ROOT / run_id
+  report_path = run_dir / "report.json"
+
+  if not report_path.exists():
+    return "missing report.json"
+
+  with open(report_path) as f:
+    report = json.load(f)
+
+  honest_output = report["verdict"]["honest_output"]
+  party_ids: list[int] = report["fault"]["party_ids"]
+
+  config = _semi_config_for(run_id, party_ids)
+  binary = MpSpdzPartyBinary(config)
+
+  honest_dir = run_dir / "honest"
+  mutated_dir = run_dir / "mutated"
+
+  corrupt = frozenset(party_ids)
+  party_cwds = tuple(
+    mutated_dir if i in corrupt else honest_dir
+    for i in range(config.n_parties)
+  )
+
+  try:
+    results = binary.run_parties(party_cwds)
+  except Exception as e:
+    return f"execution error: {e}"
+
+  semi_output = "".join(p.stdout for p in results)
+
+  if semi_output == honest_output:
+    return "inert"
+  else:
+    return "active"
+
+
+def _semi_config_for(run_id: str, party_ids: list[int]) -> Config:
+  """Build a Config for semi-party.x rerun of an existing case."""
+  m = ID_PATTERN.match(run_id)
+  if not m:
+    raise ValueError(f"invalid run_id: {run_id}")
+  instance_id = int(m.group(1))
+  seed = int(m.group(2))
+
+  return dataclasses.replace(
+    DEFAULTS,
+    instance_id=instance_id,
+    seed=Seed(value=seed),
+    protocol="semi",
+    malicious_parties=party_ids,
+    use_patched_binary=False,
+  )
+
+
 def main() -> None:
   parser = argparse.ArgumentParser(description="MPC fault-injection pipeline")
   subs = parser.add_subparsers(dest="cmd")
@@ -144,12 +250,19 @@ def main() -> None:
   agg = subs.add_parser("aggregate", help="roll up reports into SQLite")
   agg.add_argument("--combo", default="", help="disabled-sites combo label")
 
+  rerun = subs.add_parser(
+    "rerun-inert", help="re-run inert cases under semi-honest to classify them")
+  rerun.add_argument(
+    "--limit", type=int, default=0, help="max cases to rerun (0=all)")
+
   args = parser.parse_args()
 
   if args.cmd is None or args.cmd == "run":
     cmd_run(args)
   elif args.cmd == "aggregate":
     cmd_aggregate(args)
+  elif args.cmd == "rerun-inert":
+    cmd_rerun_inert(args)
 
 
 if __name__ == "__main__":
