@@ -50,7 +50,8 @@ class MpSpdzCompilerToolkit:
   def compile(self, program_id: str, source: str) -> Any:
     compiler_cls = self._load_compiler_class()
     compiler_cls.singleton = None
-    compiler = compiler_cls(custom_args=[program_id])
+    custom_args = [*self._config.spec.domain.compile_args, program_id]
+    compiler = compiler_cls(custom_args=custom_args)
     compiler.prep_compile(name=program_id)
     exec(source, compiler.VARS)
     return compiler.prog
@@ -128,11 +129,13 @@ class MpSpdzPartyBinary:
     port: int,
     cwd: Path,
   ) -> "subprocess.Popen[str]":
+    spec = self._config.spec
     cmd = [
       str(self._config.party_binary_path),
       "-p", str(party_id),
-      "-P", str(self._config.field_prime),
       "-N", str(n_parties),
+      *spec.domain.runtime_args,
+      *spec.threshold_args(n_parties),
       "-h", "localhost",
       "-pn", str(port),
       self._config.program_id,

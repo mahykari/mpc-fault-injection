@@ -1,6 +1,8 @@
 # more-protocols — findings
 
-Parked until containerization (`parallel-runs`) lands — the container entry point rewrites the launch path, the one surface this work overlaps.
+Implemented (2026-06-29). ProtocolSpec table drives compile flags, party argv, and the
+oracle. Containerization is instance-level, so runtime argv lives in `mpspdz.py:_spawn`,
+not the container entry point — no entry-point surgery was needed.
 
 ## Decisions
 
@@ -32,6 +34,11 @@ Put runtime argv on the spec (`runtime_args(...)`) so the container launcher con
 
 `malicious-shamir` honest-majority → corrupt-set sampling must respect t<n/2 (n=3 → |S|≤1).
 
-## Files that change when resumed
+## Files changed
 
-`types.py`, `config.py`, `mpspdz.py`, `oracle.py`, `main.py`.
+New `pipeline/protocols.py` (the table); `types.py` (Protocol literal), `config.py`
+(spec + corrupt-set guard, `field_prime` dropped), `mpspdz.py` (compile + argv),
+`oracle.py` (catch_signatures), `main.py`; `containers/{Containerfile,build.sh}`
+(build all patched binaries).
+
+Pending: `./containers/build.sh patched` then smoke-test spdz2k + malicious-shamir.

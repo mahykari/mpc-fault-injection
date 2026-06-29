@@ -2,7 +2,7 @@
 
 Returns a `Verdict` whose `category` is the discriminator the loop reads:
 
-  caught          mutated aborted due to MAC check
+  caught          mutated aborted on a malicious-security check
   inert           mutated output matches honest output
   aborted         mutated aborted due to timeout or crash (exit code -1)
   honest_invalid  honest produced no output; test program unusable
@@ -12,10 +12,11 @@ Returns a `Verdict` whose `category` is the discriminator the loop reads:
 """
 from __future__ import annotations
 
+from pipeline.config import NeedsOracle
 from pipeline.types import PartyOutput, RunResult, Verdict, VerdictCategory
 
 
-def judge(result: RunResult) -> Verdict:
+def judge(result: RunResult, config: NeedsOracle) -> Verdict:
   honest_output = _joined_stdout(result.honest_run)
   mutated_output = _joined_stdout(result.mutated_run)
 
@@ -25,7 +26,8 @@ def judge(result: RunResult) -> Verdict:
       honest_output, mutated_output,
     )
   if not mutated_output:
-    category, reason = _diagnose_abort(result.mutated_run)
+    category, reason = _diagnose_abort(
+      result.mutated_run, config.spec.catch_signatures)
     return _verdict(category, reason, honest_output, mutated_output)
   if mutated_output == honest_output:
     return _verdict(
@@ -54,9 +56,10 @@ def _joined_stdout(parties: tuple[PartyOutput, ...]) -> str:
 
 def _diagnose_abort(
   parties: tuple[PartyOutput, ...],
+  catch_signatures: tuple[str, ...],
 ) -> tuple[VerdictCategory, str]:
-  if any("MacCheck Failure" in p.stderr for p in parties):
-    return "caught", "MAC check caught the mutation"
+  if any(sig in p.stderr for sig in catch_signatures for p in parties):
+    return "caught", "malicious-security check caught the mutation"
   if any(p.exit_code == -1 for p in parties):
     return "aborted", "mutated run timed out"
   return "aborted", "mutated run aborted before any output"

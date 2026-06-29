@@ -30,7 +30,7 @@ def run_pipeline(config: Config) -> Report:
   program = compiler.compile(mpspdz)
   mutated = injector.inject(mpspdz, program)
   run     = executor.execute(mutated)
-  verdict = judge(run)
+  verdict = judge(run, config)
   return report(mutated, run, verdict, config)
 
 
