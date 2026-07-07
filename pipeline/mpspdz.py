@@ -10,14 +10,20 @@ and `type(inst).__name__` pokes; surface clean intent here instead.
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
-from pipeline.config import NeedsCompilerToolkit, NeedsPartyBinary
+from pipeline.config import (
+  NeedsCompilerToolkit,
+  NeedsPartyBinary,
+  NeedsSslProvisioner,
+)
 from pipeline.types import PartyOutput
 
 
@@ -204,6 +210,44 @@ class MpSpdzPartyBinary:
           t.close()
     raise RuntimeError(
       f"could not find a free {n_parties}-port window after {attempts} attempts"
+    )
+
+
+class SslProvisioner:
+  """Shared SSL PKI for protocols that use encrypted channels.
+
+  Malicious-shamir talks over `CryptoPlayer` and verifies each peer's
+  certificate against the certs in its own `Player-Data/`. Every party
+  cwd must therefore carry the *same* cert set: we generate one set for
+  `n_parties` once (MP-SPDZ's `Scripts/setup-ssl.sh`), cache it, then copy
+  it identically into each cwd. Generating per-cwd independently would
+  hand each party a different CA and the TLS handshake would fail.
+  """
+
+  def __init__(self, config: NeedsSslProvisioner) -> None:
+    self._config = config
+    self._shared: Path | None = None
+
+  def provision(self, party_cwds: Iterable[Path]) -> None:
+    shared = self._shared_certs()
+    for cwd in {Path(c) for c in party_cwds}:
+      dest = cwd / "Player-Data"
+      dest.mkdir(parents=True, exist_ok=True)
+      for cert in shared.iterdir():
+        shutil.copy(cert, dest / cert.name)
+
+  def _shared_certs(self) -> Path:
+    if self._shared is None:
+      staging = Path(tempfile.mkdtemp(prefix="mpspdz-ssl-"))
+      self._generate(staging)
+      self._shared = staging
+    return self._shared
+
+  def _generate(self, ssl_dir: Path) -> None:
+    script = self._config.mpspdz_root / "Scripts" / "setup-ssl.sh"
+    subprocess.run(
+      ["bash", str(script), str(self._config.n_parties), str(ssl_dir)],
+      check=True, capture_output=True, text=True,
     )
 
 

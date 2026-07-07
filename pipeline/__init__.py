@@ -11,7 +11,7 @@ from pipeline.executor import Executor
 from pipeline.gadgets import BumpTemplate, SignFlipTemplate
 from pipeline.generator import generate_program
 from pipeline.injector import Injector
-from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary
+from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary, SslProvisioner
 from pipeline.oracle import judge
 from pipeline.reporter import report
 from pipeline.translator import translate_to_mpspdz
@@ -23,7 +23,8 @@ def run_pipeline(config: Config) -> Report:
   party_binary = MpSpdzPartyBinary(config)
   compiler = Compiler(toolkit, config)
   injector = Injector(toolkit, (BumpTemplate(), SignFlipTemplate()), config)
-  executor = Executor(toolkit, party_binary, config)
+  ssl = SslProvisioner(config)
+  executor = Executor(toolkit, party_binary, ssl, config)
 
   circil  = generate_program(config)
   mpspdz  = translate_to_mpspdz(circil)

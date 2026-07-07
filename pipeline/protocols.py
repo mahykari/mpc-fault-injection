@@ -2,8 +2,10 @@
 
 One `ProtocolSpec` per protocol literal, keyed in `PROTOCOL_SPECS`. A spec
 carries the domain (field prime vs ring width), the threshold model
-(dishonest- vs honest-majority), and the stderr strings that mean the
-protocol's malicious-security check caught a deviation.
+(dishonest- vs honest-majority), the stderr strings that mean the
+protocol's malicious-security check caught a deviation, and whether the
+protocol runs over encrypted channels (`needs_ssl`, so the executor seeds
+each party cwd with a shared cert set before launch).
 
 The domain feeds both the compiler (ring bytecode differs from field) and
 the party-binary argv; the threshold model feeds the corrupt-set guard
@@ -52,6 +54,7 @@ class ProtocolSpec:
   domain: Domain
   honest_majority: bool
   catch_signatures: tuple[str, ...]
+  needs_ssl: bool = False
 
   def max_corrupt(self, n_parties: int) -> int:
     return (n_parties - 1) // 2 if self.honest_majority else n_parties - 1
@@ -77,5 +80,6 @@ PROTOCOL_SPECS: dict[Protocol, ProtocolSpec] = {
     domain=Prime(PRIME_MERSENNE_M127),
     honest_majority=True,
     catch_signatures=("inconsistent Shamir secret sharing",),
+    needs_ssl=True,
   ),
 }

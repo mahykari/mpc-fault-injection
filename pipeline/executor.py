@@ -7,7 +7,7 @@ from `honest/`. Per-party cwd lists live on `Config`.
 from __future__ import annotations
 
 from pipeline.config import NeedsExecutor
-from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary
+from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary, SslProvisioner
 from pipeline.timing import Timer
 from pipeline.types import MutatedProgram, RunResult
 
@@ -17,10 +17,12 @@ class Executor:
     self,
     toolkit: MpSpdzCompilerToolkit,
     party_binary: MpSpdzPartyBinary,
+    ssl: SslProvisioner,
     config: NeedsExecutor,
   ) -> None:
     self._toolkit = toolkit
     self._party_binary = party_binary
+    self._ssl = ssl
     self._config = config
 
   def execute(self, mutated: MutatedProgram) -> RunResult:
@@ -31,6 +33,9 @@ class Executor:
     )
     self._toolkit.finalize_into(mutated.original.program, self._config.honest_dir)
     self._toolkit.finalize_into(mutated.mutated.program, self._config.mutated_dir)
+    if self._config.spec.needs_ssl:
+      self._ssl.provision(
+        (*self._config.honest_party_cwds, *self._config.mutated_party_cwds))
     with Timer() as timer:
       honest_run = self._party_binary.run_parties(
         self._config.honest_party_cwds,
