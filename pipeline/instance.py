@@ -16,7 +16,25 @@ from typing import Iterable
 
 from pipeline import Config, run_pipeline
 from pipeline.timing import Timer
-from pipeline.types import Seed, VerdictCategory
+from pipeline.types import Report, Seed, VerdictCategory
+
+_MAX_TIMEOUT_RETRIES = 2
+
+
+def _timed_run(config: Config) -> tuple[Report, int]:
+  with Timer() as timer:
+    report = run_pipeline(config)
+  return report, timer.elapsed_ms
+
+
+def _run_with_retry(config: Config) -> tuple[Report, int]:
+  report, total_ms = _timed_run(config)
+  for _ in range(_MAX_TIMEOUT_RETRIES):
+    if report.verdict.category != "aborted":
+      break
+    report, elapsed_ms = _timed_run(config)
+    total_ms += elapsed_ms
+  return report, total_ms
 
 
 def run_instance(
@@ -35,13 +53,13 @@ def run_instance(
       base_config, seed=Seed(value=seed), instance_id=instance_id)
     sink = io.StringIO()
     try:
-      with Timer() as timer, contextlib.redirect_stdout(sink):
-        report = run_pipeline(config)
+      with contextlib.redirect_stdout(sink):
+        report, elapsed_ms = _run_with_retry(config)
     except Exception as exc:
       counts["error"] += 1
       print(f"[i{instance_id:02d} seed={seed:04d}] ERROR — {exc!s}")
       continue
-    wall_ms.append(timer.elapsed_ms)
+    wall_ms.append(elapsed_ms)
     category = report.verdict.category
     counts[category] += 1
     if category == "bug":
@@ -49,7 +67,7 @@ def run_instance(
     print(
       f"[i{instance_id:02d} seed={seed:04d}] "
       f"{category} — {report.verdict.reason} "
-      f"({timer.elapsed_ms} ms)")
+      f"({elapsed_ms} ms)")
 
   _print_summary(instance_id, len(seeds), counts, bug_seeds, wall_ms)
 
