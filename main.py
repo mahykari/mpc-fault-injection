@@ -105,12 +105,13 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     live_ids.add(case_id)
     verdict = data["verdict"]["category"]
     wall_ms = data["duration_ms"]
+    combo = data.get("combo", "baseline")
 
     conn.execute(
       "INSERT OR REPLACE INTO runs "
       "(id, seed, combo, verdict, wall_ms, instance_id, retired_at) "
       "VALUES (?, ?, ?, ?, ?, ?, NULL)",
-      (case_id, seed, args.combo, verdict, wall_ms, instance_id),
+      (case_id, seed, combo, verdict, wall_ms, instance_id),
     )
 
     inserted += 1
@@ -141,8 +142,7 @@ def main() -> None:
 
   subs.add_parser("run", help="execute the fuzzing pipeline")
 
-  agg = subs.add_parser("aggregate", help="roll up reports into SQLite")
-  agg.add_argument("--combo", default="", help="disabled-sites combo label")
+  subs.add_parser("aggregate", help="roll up reports into SQLite")
 
   args = parser.parse_args()
 

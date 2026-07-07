@@ -18,14 +18,12 @@ def report(
   verdict: Verdict,
   config: NeedsReporter,
 ) -> Report:
-  with open(config.report_path, "w") as f:
-    json.dump(dataclasses.asdict(Report(
-      fault=mutated.record,
-      verdict=verdict,
-      duration_ms=run.duration_ms,
-    )), f, indent=2)
-  return Report(
+  result = Report(
     fault=mutated.record,
     verdict=verdict,
     duration_ms=run.duration_ms,
+    combo=config.combo,
   )
+  with open(config.report_path, "w") as f:
+    json.dump(dataclasses.asdict(result), f, indent=2)
+  return result

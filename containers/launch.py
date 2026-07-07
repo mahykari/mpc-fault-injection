@@ -27,7 +27,7 @@ MAX_DEPTH = 40
 
 def parse_args() -> argparse.Namespace:
   p = argparse.ArgumentParser(description=__doc__)
-  p.add_argument("--instances", type=int, required=True)
+  p.add_argument("--instances", type=int, help="ignored when --plan is given")
   p.add_argument("--runs", type=int, default=50, help="seeds per instance")
   p.add_argument("--seed", type=int, default=0, help="seeds the seed sampling")
   p.add_argument("--pool", type=int, default=100_000, help="seed space to sample from")
@@ -36,6 +36,8 @@ def parse_args() -> argparse.Namespace:
   p.add_argument("--memory", help="podman --memory per instance, e.g. 4g")
   p.add_argument("--config", help="JSON of tunables, merged into every instance's spec")
   p.add_argument("--disabled-sites", help="comma-separated site IDs to disable MAC staging")
+  p.add_argument("--plan", help="JSON file: list of per-instance specs "
+                 "{instance_id, seeds, combo, expression_depth}")
   return p.parse_args()
 
 
@@ -79,21 +81,40 @@ def spawn(
   ])
 
 
+def default_instances(args: argparse.Namespace) -> list[dict[str, Any]]:
+  if args.instances is None:
+    raise SystemExit("need --instances (or --plan)")
+  slices = seed_slices(args.instances, args.runs, args.pool, args.seed)
+  depths = instance_depths(args.instances, args.seed)
+  combo = args.disabled_sites or "baseline"
+  return [
+    {"instance_id": i, "seeds": s, "combo": combo, "expression_depth": depths[i]}
+    for i, s in enumerate(slices)
+  ]
+
+
+def env_sites(combo: str) -> str | None:
+  return None if combo in ("", "baseline") else combo
+
+
 def main() -> None:
   args = parse_args()
   RUNS_DIR.mkdir(exist_ok=True)
   tunables: dict[str, Any] = json.loads(Path(args.config).read_text()) if args.config else {}
-  slices = seed_slices(args.instances, args.runs, args.pool, args.seed)
-  depths = instance_depths(args.instances, args.seed)
+  instances: list[dict[str, Any]] = (
+    json.loads(Path(args.plan).read_text()) if args.plan else default_instances(args))
 
   specs_dir = Path(tempfile.mkdtemp(prefix="fuzz-specs-"))
   procs = []
-  for i, seeds in enumerate(slices):
-    spec = {**tunables, "seeds": seeds, "instance_id": i, "expression_depth": depths[i]}
-    spec_path = specs_dir / f"i{i:02d}.json"
+  for inst in instances:
+    iid = inst["instance_id"]
+    spec = {**tunables, **inst}
+    spec_path = specs_dir / f"i{iid:02d}.json"
     spec_path.write_text(json.dumps(spec))
-    procs.append(spawn(i, spec_path, args.image, args.cpus, args.memory, args.disabled_sites))
-  codes = [(i, p.wait()) for i, p in enumerate(procs)]
+    procs.append(spawn(
+      iid, spec_path, args.image, args.cpus, args.memory,
+      env_sites(inst.get("combo", "baseline"))))
+  codes = [(inst["instance_id"], p.wait()) for inst, p in zip(instances, procs)]
 
   print()
   print("=== launch summary ===")

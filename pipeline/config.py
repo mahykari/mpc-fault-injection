@@ -34,6 +34,7 @@ class Config:
   expression_depth: int = 20
   let_probability: float = 0.6
   instance_id: int = 0
+  combo: str = "baseline"
 
   @property
   def program_id(self) -> str:
@@ -154,3 +155,5 @@ class NeedsExecutor(View):
 class NeedsReporter(View):
   @property
   def report_path(self) -> Path: ...
+  @property
+  def combo(self) -> str: ...

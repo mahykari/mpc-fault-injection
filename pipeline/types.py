@@ -87,3 +87,4 @@ class Report:
   fault: InjectionRecord
   verdict: Verdict
   duration_ms: int
+  combo: str = "baseline"
