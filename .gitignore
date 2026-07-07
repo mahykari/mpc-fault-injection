@@ -35,3 +35,7 @@ runs/
 # worktree via .worktreeinclude). Not for git history.
 CLAUDE.local.md
 briefings/
+
+# local scratch / worktree setup
+prop.txt
+.worktreeinclude
