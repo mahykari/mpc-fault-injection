@@ -23,6 +23,7 @@ def report(
     verdict=verdict,
     duration_ms=run.duration_ms,
     combo=config.combo,
+    protocol=config.protocol,
   )
   with open(config.report_path, "w") as f:
     json.dump(dataclasses.asdict(result), f, indent=2)

@@ -52,6 +52,7 @@ DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY,
   seed INTEGER,
+  protocol TEXT,
   combo TEXT,
   verdict TEXT,
   wall_ms INTEGER,
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS runs (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   retired_at TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_protocol_verdict ON runs(protocol, verdict);
 CREATE INDEX IF NOT EXISTS idx_combo_verdict ON runs(combo, verdict);
 """
 
@@ -80,6 +82,10 @@ def cmd_run(_args: argparse.Namespace) -> None:
 def cmd_aggregate(args: argparse.Namespace) -> None:
   conn = sqlite3.connect(DB_PATH)
   conn.executescript(DB_SCHEMA)
+  # Backfill the column on a pre-protocol DB; CREATE IF NOT EXISTS won't add it.
+  columns = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+  if "protocol" not in columns:
+    conn.execute("ALTER TABLE runs ADD COLUMN protocol TEXT DEFAULT 'mascot'")
 
   live_ids: set[str] = set()
   inserted = 0
@@ -106,12 +112,13 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     verdict = data["verdict"]["category"]
     wall_ms = data["duration_ms"]
     combo = data.get("combo", "baseline")
+    protocol = data.get("protocol", "mascot")
 
     conn.execute(
       "INSERT OR REPLACE INTO runs "
-      "(id, seed, combo, verdict, wall_ms, instance_id, retired_at) "
-      "VALUES (?, ?, ?, ?, ?, ?, NULL)",
-      (case_id, seed, combo, verdict, wall_ms, instance_id),
+      "(id, seed, protocol, combo, verdict, wall_ms, instance_id, retired_at) "
+      "VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+      (case_id, seed, protocol, combo, verdict, wall_ms, instance_id),
     )
 
     inserted += 1

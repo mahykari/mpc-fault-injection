@@ -88,3 +88,4 @@ class Report:
   verdict: Verdict
   duration_ms: int
   combo: str = "baseline"
+  protocol: Protocol = "mascot"
