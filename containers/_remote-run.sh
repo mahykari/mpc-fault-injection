@@ -14,6 +14,10 @@ if [ -f runs/results.db ]; then
   mv runs/results.db "$archive"
   echo "archived prior results.db -> $archive"
 fi
+# Clear prior per-run dirs too, else aggregate re-ingests an old campaign's
+# reports into the fresh results.db (find, not a glob — 80k dirs overflow argv).
+find runs -maxdepth 1 -name 'i*-case-*' -type d -exec rm -rf {} + 2>/dev/null || true
+echo "cleared prior run dirs"
 
 echo "==> building pipeline image"
 ./containers/build.sh pipeline
