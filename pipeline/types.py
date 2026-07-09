@@ -89,3 +89,4 @@ class Report:
   duration_ms: int
   combo: str = "baseline"
   protocol: Protocol = "mascot"
+  n_parties: int = 3

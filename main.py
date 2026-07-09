@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY,
   seed INTEGER,
   protocol TEXT,
+  n_parties INTEGER,
   combo TEXT,
   verdict TEXT,
   wall_ms INTEGER,
@@ -85,7 +86,9 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
   columns = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
   if "protocol" not in columns:
     conn.execute("ALTER TABLE runs ADD COLUMN protocol TEXT DEFAULT 'mascot'")
-  # After the column is guaranteed present, not before (fresh vs migrated DB).
+  if "n_parties" not in columns:
+    conn.execute("ALTER TABLE runs ADD COLUMN n_parties INTEGER DEFAULT 3")
+  # After the columns are guaranteed present, not before (fresh vs migrated DB).
   conn.execute("CREATE INDEX IF NOT EXISTS idx_protocol_verdict ON runs(protocol, verdict)")
 
   live_ids: set[str] = set()
@@ -114,12 +117,13 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
     wall_ms = data["duration_ms"]
     combo = data.get("combo", "baseline")
     protocol = data.get("protocol", "mascot")
+    n_parties = data.get("n_parties", 3)
 
     conn.execute(
       "INSERT OR REPLACE INTO runs "
-      "(id, seed, protocol, combo, verdict, wall_ms, instance_id, retired_at) "
-      "VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
-      (case_id, seed, protocol, combo, verdict, wall_ms, instance_id),
+      "(id, seed, protocol, n_parties, combo, verdict, wall_ms, instance_id, retired_at) "
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+      (case_id, seed, protocol, n_parties, combo, verdict, wall_ms, instance_id),
     )
 
     inserted += 1

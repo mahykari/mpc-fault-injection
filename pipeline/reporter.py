@@ -24,6 +24,7 @@ def report(
     duration_ms=run.duration_ms,
     combo=config.combo,
     protocol=config.protocol,
+    n_parties=config.n_parties,
   )
   with open(config.report_path, "w") as f:
     json.dump(dataclasses.asdict(result), f, indent=2)
