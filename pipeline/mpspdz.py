@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -122,9 +124,30 @@ class MpSpdzPartyBinary:
         port=port, cwd=party_cwds[i])
       for i in range(n_parties)
     ]
+    # One deadline for the whole run: a watchdog kills every party's process
+    # group at once on expiry. Parties run concurrently, so a per-party timeout
+    # would serialise to n * timeout_s and leave the still-hung peers running.
+    killed = threading.Event()
+
+    def _reap_all() -> None:
+      for proc in processes:
+        self._kill_group(proc)
+
+    def _watchdog() -> None:
+      killed.set()
+      _reap_all()
+
+    timer = threading.Timer(self._config.timeout_s, _watchdog)
+    timer.start()
+    try:
+      collected = [proc.communicate() for proc in processes]
+    finally:
+      timer.cancel()
+      _reap_all()
+
     return tuple(
-      self._collect(proc, party_id=i, timeout_s=self._config.timeout_s)
-      for i, proc in enumerate(processes)
+      self._party_output(i, processes[i], collected[i], timed_out=killed.is_set())
+      for i in range(n_parties)
     )
 
   def _spawn(
@@ -151,31 +174,42 @@ class MpSpdzPartyBinary:
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
       text=True,
+      start_new_session=True,
     )
 
-  def _collect(
-    self,
-    proc: "subprocess.Popen[str]",
-    *,
-    party_id: int,
-    timeout_s: float,
-  ) -> PartyOutput:
+  @staticmethod
+  def _kill_group(proc: "subprocess.Popen[str]") -> None:
+    """SIGKILL the party's whole process group (start_new_session gave it its
+    own), so a hung party and any children die together. No-op if it's gone."""
+    if proc.poll() is not None:
+      return
     try:
-      stdout, stderr = proc.communicate(timeout=timeout_s)
+      os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+      try:
+        proc.kill()
+      except ProcessLookupError:
+        pass
+
+  def _party_output(
+    self,
+    party_id: int,
+    proc: "subprocess.Popen[str]",
+    collected: tuple[str, str],
+    *,
+    timed_out: bool,
+  ) -> PartyOutput:
+    stdout, stderr = collected
+    if timed_out:
+      note = f"\n[party {party_id}] timed out after {self._config.timeout_s}s"
       return PartyOutput(
-        party_id=party_id,
-        stdout=stdout, stderr=stderr,
-        exit_code=proc.returncode,
+        party_id=party_id, stdout=stdout or "",
+        stderr=(stderr or "") + note, exit_code=-1,
       )
-    except subprocess.TimeoutExpired:
-      proc.kill()
-      stdout, stderr = proc.communicate()
-      return PartyOutput(
-        party_id=party_id,
-        stdout=stdout,
-        stderr=stderr + f"\n[party {party_id}] timed out after {timeout_s}s",
-        exit_code=-1,
-      )
+    return PartyOutput(
+      party_id=party_id, stdout=stdout, stderr=stderr,
+      exit_code=proc.returncode,
+    )
 
   @staticmethod
   def _pick_port(n_parties: int, attempts: int = 50) -> int:

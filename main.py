@@ -43,7 +43,7 @@ DEFAULTS = Config(
   protocol="mascot",
   n_parties=3,
   malicious_parties=[0, 1],
-  timeout_s=30.0,
+  timeout_s=120.0,
   use_patched_binary=True,
   seeded_bug_binary=False,
 )
