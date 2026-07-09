@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol as View
 
+from pipeline.protocols import PROTOCOL_SPECS, ProtocolSpec
 from pipeline.types import Protocol, Seed
 
 
@@ -26,7 +27,6 @@ class Config:
   seed: Seed
   protocol: Protocol
   n_parties: int
-  field_prime: int
   malicious_parties: list[int]
   timeout_s: float
   use_patched_binary: bool = False
@@ -35,6 +35,21 @@ class Config:
   let_probability: float = 0.6
   instance_id: int = 0
   combo: str = "baseline"
+
+  def __post_init__(self) -> None:
+    spec = self.spec
+    max_corrupt = spec.max_corrupt(self.n_parties)
+    if not 1 <= len(self.malicious_parties) <= max_corrupt:
+      raise ValueError(
+        f"{self.protocol}: corrupt set size {len(self.malicious_parties)} "
+        f"outside [1, {max_corrupt}] for n={self.n_parties}")
+    if any(p not in range(self.n_parties) for p in self.malicious_parties):
+      raise ValueError(
+        f"corrupt party ids {self.malicious_parties} outside range(0, {self.n_parties})")
+
+  @property
+  def spec(self) -> ProtocolSpec:
+    return PROTOCOL_SPECS[self.protocol]
 
   @property
   def program_id(self) -> str:
@@ -119,6 +134,8 @@ class NeedsInjector(View):
 class NeedsCompilerToolkit(View):
   @property
   def mpspdz_root(self) -> Path: ...
+  @property
+  def spec(self) -> ProtocolSpec: ...
 
 
 class NeedsPartyBinary(View):
@@ -127,9 +144,14 @@ class NeedsPartyBinary(View):
   @property
   def program_id(self) -> str: ...
   @property
-  def field_prime(self) -> int: ...
+  def spec(self) -> ProtocolSpec: ...
   @property
   def timeout_s(self) -> float: ...
+
+
+class NeedsOracle(View):
+  @property
+  def spec(self) -> ProtocolSpec: ...
 
 
 class NeedsCompiler(View):
@@ -137,11 +159,20 @@ class NeedsCompiler(View):
   def program_id(self) -> str: ...
 
 
+class NeedsSslProvisioner(View):
+  @property
+  def mpspdz_root(self) -> Path: ...
+  @property
+  def n_parties(self) -> int: ...
+
+
 class NeedsExecutor(View):
   @property
   def program_id(self) -> str: ...
   @property
   def timeout_s(self) -> float: ...
+  @property
+  def spec(self) -> ProtocolSpec: ...
   @property
   def honest_dir(self) -> Path: ...
   @property

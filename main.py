@@ -36,15 +36,12 @@ DB_PATH = RUNS_ROOT / "results.db"
 
 N_RUNS = 200
 
-PRIME_MERSENNE_M127 = 2**127 - 1
-
 DEFAULTS = Config(
   mpspdz_root=MPSPDZ_ROOT,
   runs_root=RUNS_ROOT,
   seed=Seed(value=0),
   protocol="mascot",
   n_parties=3,
-  field_prime=PRIME_MERSENNE_M127,
   malicious_parties=[0, 1],
   timeout_s=30.0,
   use_patched_binary=True,

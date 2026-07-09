@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-Protocol = Literal["mascot", "semi"]
+Protocol = Literal["mascot", "semi", "spdz2k", "malicious-shamir"]
 VerdictCategory = Literal["caught", "inert", "aborted", "honest_invalid", "bug"]
 
 

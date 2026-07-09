@@ -1,8 +1,8 @@
-# Build a patched mascot-party.x (and any other party binaries we add later)
-# from MP-SPDZ v0.4.2 source. Builds inside ubuntu:22.04 because Ubuntu
-# 26.04 host has Boost 1.90, which is incompatible with libOTe's ASIO usage.
+# Build patched party binaries (mascot, spdz2k, malicious-shamir, ...) from
+# MP-SPDZ v0.4.2 source. Builds inside ubuntu:22.04 because Ubuntu 26.04 host
+# has Boost 1.90, which is incompatible with libOTe's ASIO usage.
 #
-# Driven by containers/build.sh, which extracts the binary into
+# Driven by containers/build.sh, which extracts the binaries into
 # MP-SPDZ/bin/Linux-amd64-patched/ on the host.
 
 FROM ubuntu:22.04 AS builder
@@ -68,16 +68,20 @@ RUN echo "CXX = clang++-11"                                              >> CONF
 # placeholder cert/key pairs into Player-Data/; runtime reads them.
 RUN ./Scripts/setup-ssl.sh 2 Player-Data
 
-# Build libOTe's pinned Boost + libOTe, then static/mascot-party.x.
-# The plain `mascot-party.x` target links against libSPDZ.so + the in-container
-# Boost 1.83 and won't run on the host; the `static/mascot-party.x` target
-# (Makefile line 154) static-links Boost + libstdc++, leaving only
-# libc/libdl/libm/libpthread dynamic — matches the stock binary at
-# MP-SPDZ/bin/Linux-amd64/mascot-party.x.
+# Build libOTe's pinned Boost + libOTe, then the static party binaries.
+# The plain `<proto>-party.x` targets link against libSPDZ.so + the in-container
+# Boost 1.83 and won't run on the host; the `static/<proto>-party.x` targets
+# (Makefile line 154) static-link Boost + libstdc++, leaving only
+# libc/libdl/libm/libpthread dynamic — matches the stock binaries at
+# MP-SPDZ/bin/Linux-amd64/.
+#
+# PARTY_BINARIES is the space-separated list of `static/<proto>-party.x` targets
+# to build, set per-variant by containers/build.sh.
+ARG PARTY_BINARIES="static/mascot-party.x static/spdz2k-party.x static/malicious-shamir-party.x"
 RUN make clean-deps boost libote
-RUN make -j"$(nproc)" static/mascot-party.x
+RUN make -j"$(nproc)" $PARTY_BINARIES
 
-RUN ls -la static/mascot-party.x && file static/mascot-party.x
+RUN ls -la static/*-party.x && file static/*-party.x
 
 # ─────────────────────────────────────────────────────────────────────────────
 # runtime: the full fuzz pipeline. Layers uv + this repo onto `builder`, which
@@ -90,12 +94,13 @@ FROM builder AS runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Shape an MP-SPDZ root that Config's paths resolve against: Compiler/ is
-# already at /src/mp-spdz-0.4.2; expose the static binary where
+# already at /src/mp-spdz-0.4.2; expose every static binary we built where
 # `Config.party_binary_path` (Linux-amd64-patched, use_patched_binary=True)
 # looks for it.
 RUN mkdir -p /src/mp-spdz-0.4.2/bin/Linux-amd64-patched \
- && ln -s /src/mp-spdz-0.4.2/static/mascot-party.x \
-          /src/mp-spdz-0.4.2/bin/Linux-amd64-patched/mascot-party.x
+ && for b in /src/mp-spdz-0.4.2/static/*-party.x; do \
+      ln -s "$b" "/src/mp-spdz-0.4.2/bin/Linux-amd64-patched/$(basename "$b")"; \
+    done
 
 WORKDIR /app
 RUN ln -s /src/mp-spdz-0.4.2 /app/MP-SPDZ && mkdir -p /app/runs
