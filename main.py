@@ -60,7 +60,6 @@ CREATE TABLE IF NOT EXISTS runs (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   retired_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_protocol_verdict ON runs(protocol, verdict);
 CREATE INDEX IF NOT EXISTS idx_combo_verdict ON runs(combo, verdict);
 """
 
@@ -86,6 +85,8 @@ def cmd_aggregate(args: argparse.Namespace) -> None:
   columns = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
   if "protocol" not in columns:
     conn.execute("ALTER TABLE runs ADD COLUMN protocol TEXT DEFAULT 'mascot'")
+  # After the column is guaranteed present, not before (fresh vs migrated DB).
+  conn.execute("CREATE INDEX IF NOT EXISTS idx_protocol_verdict ON runs(protocol, verdict)")
 
   live_ids: set[str] = set()
   inserted = 0
