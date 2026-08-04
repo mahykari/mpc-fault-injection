@@ -35,6 +35,13 @@ LEASE_MULTIPLIER = 5  # lease sits well above a slow-but-alive run, never re-ser
 class DispatchHandler(BaseHTTPRequestHandler):
   server: "DispatchServer"
 
+  def log_message(self, format: str, *args: Any) -> None:
+    """Only failures. 16 workers at a run a second buried the campaign log in
+    access lines and pushed it into the gigabytes over a long run."""
+    status = str(args[1]) if len(args) > 1 else ""
+    if not status.startswith("2"):
+      super().log_message(format, *args)
+
   def do_GET(self) -> None:
     if self.path == "/next":
       self._serve_next()

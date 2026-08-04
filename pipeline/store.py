@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS experiment (
 
 CREATE INDEX IF NOT EXISTS idx_experiment_available
   ON experiment(completed_at, claimed_at, id);
+CREATE INDEX IF NOT EXISTS idx_experiment_exhausted
+  ON experiment(completed_at, attempts, lease_expires_at);
 CREATE INDEX IF NOT EXISTS idx_experiment_verdict ON experiment(verdict);
 
 CREATE TABLE IF NOT EXISTS injection (
@@ -132,6 +134,7 @@ class Store:
     self.store_connection.execute("PRAGMA foreign_keys = ON")
     self.store_connection.executescript(SCHEMA)
     self.store_connection.commit()
+    self.last_sweep: datetime | None = None
 
   def insert_config(self, config: ExperimentConfig) -> int:
     """Return this grid point's row id, inserting it if new.
@@ -183,7 +186,7 @@ class Store:
     worker it touches is retired rather than cycled forever.
     """
     now = datetime.now(timezone.utc)
-    self._abandon_exhausted(now)
+    self._sweep_if_due(now, lease_s)
     # Select and lease in one statement: no window where the row is picked but
     # not yet leased.
     row = self.store_connection.execute(
@@ -243,6 +246,20 @@ class Store:
       "SELECT verdict, COUNT(*) FROM experiment "
       "WHERE completed_at IS NOT NULL GROUP BY verdict").fetchall()
     return {str(verdict): int(count) for verdict, count in rows}
+
+  def _sweep_if_due(self, now: datetime, lease_s: float) -> None:
+    """Rate-limit the sweep: it scans, and every claim would make that quadratic.
+
+    A row cannot become abandonable faster than its own lease expires, so once
+    per `lease_s` is as often as sweeping can possibly change an outcome. Riding
+    it on every claim pinned the dispatcher at 97% CPU against a 2M-row table
+    and starved every other request.
+    """
+    if (self.last_sweep is not None
+        and (now - self.last_sweep).total_seconds() < lease_s):
+      return
+    self._abandon_exhausted(now)
+    self.last_sweep = now
 
   def _abandon_exhausted(self, now: datetime) -> None:
     """Retire poison pills so they leave the pending set and show in `counts`.
