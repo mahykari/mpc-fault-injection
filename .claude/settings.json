@@ -1,4 +1,27 @@
 {
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "additionalDirectories": ["../MP-SPDZ", "../python-circil"],
+    "allow": [
+      "Read", "Glob", "Grep",
+      "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
+      "Bash(find *)", "Bash(wc *)", "Bash(grep *)", "Bash(rg *)",
+      "Bash(git status *)", "Bash(git log *)", "Bash(git diff *)",
+      "Bash(git add *)", "Bash(git commit *)", "Bash(git apply *)",
+      "Bash(uv run *)", "Bash(uv sync *)", "Bash(uv add *)",
+      "Bash(mypy *)", "Bash(python *)", "Bash(python3 *)",
+      "Bash(podman *)", "Bash(make *)",
+      "Bash(./containers/build.sh *)", "Bash(./containers/launch.py *)",
+      "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(cd *)",
+      "Bash(tmux *)", "Bash(kill *)", "Bash(pkill *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)", "Bash(git push *)",
+      "Bash(git reset --hard *)", "Bash(git clean *)",
+      "Bash(git checkout -- *)",
+      "Bash(ssh *)", "Bash(rsync *)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {
