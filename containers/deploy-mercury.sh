@@ -30,8 +30,11 @@ rsync -az \
 echo "==> launch remote campaign (backgrounded on mercury, runs/point=$RUNS)"
 # setsid + ssh -n so the remote job detaches into its own session and ssh
 # returns immediately (a plain nohup&  left the ssh — and this script — hung).
-ssh -n "$HOST" "cd $DEST && mkdir -p runs && \
-  setsid bash containers/_remote-run.sh $RUNS > runs/continuous.log 2>&1 < /dev/null &"
+# The launch is its own statement: `&` binds looser than `&&`, so folding it
+# into the cd/mkdir chain backgrounds the whole list in a subshell that keeps
+# ssh's stdout open and waits for the campaign, hanging the ssh anyway.
+ssh -n "$HOST" "cd $DEST && mkdir -p runs || exit 1
+setsid bash containers/_remote-run.sh $RUNS > runs/continuous.log 2>&1 < /dev/null &"
 
 echo "==> launched. follow it:"
 echo "    ssh $HOST 'tail -f $DEST/runs/continuous.log'"
