@@ -1,0 +1,28 @@
+# Campaign dispatcher image: the work queue over HTTP.
+#
+# Deliberately not the MP-SPDZ pipeline image. The dispatcher never compiles or
+# runs a protocol, so it needs no MP-SPDZ, no party binaries, no uv, no circil:
+# python:3.12-slim plus stdlib, rebuilt in seconds when dispatch logic changes.
+# The sqlite file lives on the mounted runs/ volume, never in the image.
+#
+# Driven by containers/build.sh dispatch.
+#
+#   podman run -d --name dispatcher -p 8080:8080 -v ./runs:/app/runs \
+#     mpspdz-dispatch:v0.4.2 --db /app/runs/campaign.db --runs 5000
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY pipeline/ /app/pipeline/
+COPY containers/dispatch.py /app/containers/dispatch.py
+
+# The dispatcher imports only types/protocols/store/campaign/wire, but the
+# package __init__ pulls in the whole pipeline (circil, MP-SPDZ Compiler), which
+# is absent here. Blank it so `import pipeline.campaign` stays leaf-only.
+RUN : > /app/pipeline/__init__.py
+
+EXPOSE 8080
+
+# No --db here: the launcher passes it, so the path and the mount stay in one place.
+ENTRYPOINT ["python", "containers/dispatch.py"]

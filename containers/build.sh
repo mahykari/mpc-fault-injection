@@ -5,6 +5,7 @@
 #   ./containers/build.sh seeded-bug  # base + seeded-bug overlay → Linux-amd64-patched-seeded-bug/
 #   ./containers/build.sh pipeline    # fuzz-pipeline image (runtime stage, base patches)
 #   ./containers/build.sh pipeline-seeded-bug  # fuzz-pipeline image with seeded-bug patches
+#   ./containers/build.sh dispatch    # campaign dispatcher image (no MP-SPDZ, seconds)
 #
 # The binary variants build the `builder` stage and extract the static party
 # binaries to the host. `pipeline` builds the `runtime` stage into a runnable
@@ -24,6 +25,17 @@ ALL_PROTOCOLS="mascot-party.x spdz2k-party.x malicious-shamir-party.x"
 
 # bare names ("a-party.x b-party.x") -> make targets ("static/a-party.x static/b-party.x")
 make_targets() { local t=""; for b in $1; do t="$t static/$b"; done; echo "$t"; }
+
+if [ "$VARIANT" = "dispatch" ]; then
+  IMAGE_TAG="mpspdz-dispatch:v0.4.2"
+  echo "==> Building $IMAGE_TAG (dispatcher only: no MP-SPDZ, no uv)"
+  podman build \
+    --file "containers/Containerfile.dispatch" \
+    --tag "$IMAGE_TAG" \
+    .
+  echo "==> Done: $IMAGE_TAG"
+  exit 0
+fi
 
 if [ "$VARIANT" = "pipeline" ] || [ "$VARIANT" = "pipeline-seeded-bug" ]; then
   if [ "$VARIANT" = "pipeline-seeded-bug" ]; then
@@ -61,7 +73,7 @@ case "$VARIANT" in
     PARTY_BINARIES="mascot-party.x"
     ;;
   *)
-    echo "usage: $0 [patched|seeded-bug|pipeline|pipeline-seeded-bug]" >&2
+    echo "usage: $0 [patched|seeded-bug|pipeline|pipeline-seeded-bug|dispatch]" >&2
     exit 1
     ;;
 esac
