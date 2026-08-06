@@ -1,0 +1,44 @@
+- [Use SSH for git clone](feedback_git_clone_ssh.md) — clone private repos via `git@github.com:...`, not HTTPS
+- [Two-space Python indent](feedback_indentation.md) — user prefers 2-space, not PEP 8's 4-space
+- [Find vs seed axes](project_find_vs_seed_axes.md) — finding real bugs (corrupt-party deviations + types as instrument) vs seeding bugs to validate the harness; don't conflate
+- [Injector surfaces, not creates](feedback_injector_surfaces_not_creates.md) — pipeline surfaces existing bugs by riding a deviation through a missing check; never disables/creates a check
+- [Terse, no commentary](feedback_terse_no_commentary.md) — change-and-why bullets, skip framing/alignment-praise/recap
+- [Don't verify standing invariants](feedback_dont_verify_invariants.md) — on review, don't run mypy/main.py to confirm they pass; user knows they do
+- [Yap less, fixed vocabulary](feedback_yap_less.md) — drastically shorter answers; reuse the user's own terms verbatim, no paraphrasing for variety
+- [Don't escalate small asks](feedback_dont_escalate_small_asks.md) — do the literal small request; don't turn it into a design-decision menu
+- [Stay high-level](feedback_stay_high_level.md) — act like a fuzzer user, not an MPC theorist; inert mutations are noise to filter, not subtleties to investigate
+- [Push back, peer tone](feedback_push_back.md) — OK to say "look, ..." or "I don't follow"; don't softly mirror unclear/contradictory framing
+- [Fuzzer, not verifier](feedback_testing_not_verifying.md) — sample, don't enumerate; combinatorial blowup is the workload
+- [No consultant jargon](feedback_no_consultant_jargon.md) — avoid "blast radius" / "single source of truth" decoration; be direct
+- [Shared mutated bytecode](project_shared_mutated_bytecode.md) — all corrupt parties load the same mutated IR (for now)
+- [Code structure rules](feedback_code_structure.md) — master Config + typing.Protocol views; no f-strings at call sites; derived values as @property; no long arg lists
+- [Code terseness mirrors comms](feedback_code_terseness.md) — no inline magic strings or chunky if/elif dispatch; classify at the source layer as a typed field, not re-derived at call sites
+- [Describe by general capability](feedback_describe_change_generally.md) — commit/doc scope must match what the change does, not just the smoke-test example
+- [Isolate adapter-layer pokes](feedback_isolate_adapter_pokes.md) — low-level MP-SPDZ accesses belong in helpers, not in business logic; the helpers can stay ugly, the call sites must read cleanly
+- [Terse commit messages](feedback_terse_commits.md) — one-line title, optional ≤5-line why; no multi-section bodies, no "implementation note" subsections
+- [Next: python-circil integration](project_next_task_circil_integration.md) — first task for 2026-05-13; replace Generator + Translator stubs
+- [Patched mascot-party.x + first gadget](project_patched_binary_done.md) — patched binary, GadgetTemplate dispatcher, SingleVariableBump gadget all in; MAC check observed
+- [check_program (RESOLVED)](project_check_program_blocker.md) — historical — what the 0001 patch fixes; kept as background
+- [MP-SPDZ Compiler quirks](project_compiler_quirks.md) — singleton, module-level program globals, CWD-bound output, deepcopy-resistant — what pipeline/mpspdz.py works around
+- [MP-SPDZ jump model](project_mpspdz_jump_model.md) — all jumps over public state; every party traverses identical paths; static sync sequence == dynamic sync sequence
+- [Use library walker for tree IRs](feedback_walker_for_tree_traversal.md) — subclass EmptyVisitor/IRWalker, don't flatten to isinstance recursion
+- [Delegation scope](feedback_delegation_scope.md) — "give me something to do" = small wire-connecting piece, not the substantive feature; don't offload meaty work
+- [Suggest, don't write](feedback_suggest_dont_write.md) — default mode is point-and-propose; user implements. Hands off until explicitly asked to write
+- [User drives the button](feedback_user_drives_button.md) — prep + hand off launches/pushes/deploys; user runs them, don't run or re-offer
+- [Emoticons and kaomoji OK](feedback_emoticons_ok.md) — chat replies welcome `:)` and `¯\_(ツ)_/¯`; code/commits stay clean
+- [more-protocols (implemented)](project_more_protocols_plan.md) — ProtocolSpec table for spdz2k + malicious-shamir done in worktree; pending `./containers/build.sh patched` + smoke test
+- [Containerization rationale](project_containerization_rationale.md) — podman-per-instance = parallel fuzzers, minimal interference (not just the singleton race); landed on master
+- [First campaign baseline](project_first_campaign_baseline.md) — 50k stock-MASCOT run: bug=0, 82% caught / 18% inert; baseline for seeded-bug comparison
+- [Open threads](project_open_threads.md) — pick up here: unpushed commits + open PR #3, Semi dry-run, reporter verdict persistence, retry-on-timeout, seeded-bug run
+- [Seeded-bug campaign prep](project_seeded_bug_campaign_prep.md) — 8-combo Check() toggling campaign; fix reporter, write SQLite aggregator, then run
+- [Session 2026-06-29](project_session_2026_06_29.md) — retry, semi-rerun, protocols worktrees + 80k campaign; merge branches + smoke-test next
+- [Seeded-bug campaign result](project_seeded_bug_campaign_result.md) — 80k run done on mercury; bugs only when subprocessor_check+beaver_check both off
+- [Inspect in worktree](feedback_inspect_in_worktree.md) — read a branch's files in its own worktree; no merge-sim from master
+- [Shamir SSL gap](project_shamir_ssl_gap.md) — malicious-shamir blocked on per-run SSL cert provisioning; spdz2k proven caught
+- [Mercury deploy](project_mercury_deploy.md) — no uv on mercury; host runs system python3; deploy via ./containers/deploy-mercury.sh
+- [Party-count grid](project_party_count_grid.md) — campaign spreads protocol x party-count (3,5,7,9); shamir even-n verified OK; runs labeled by n_parties
+- [Simple commands](feedback_simple_commands.md) — no wizard one-liners; one simple command at a time, or explain it first
+- [Session state 2026-07-09](project_session_state_2026_07_09.md) — 2M campaign running on mercury; reaping fix landed; server underloaded, next = more instances / drop round barrier
+- [Session state 2026-07-13](project_session_state_2026_07_13.md) — campaign stopped at 21k; 66% caught / 20% honest_invalid / 14% inert / 0 bug; honest_invalid = mascot+spdz2k at n=9, likely timeouts
+- [Dispatcher pull model](project_dispatcher_pull_model.md) — round barrier replaced by HTTP dispatcher + long-lived pull workers; store.py is queue and results in one
+- [Next: in-memory queue](project_next_task_in_memory_queue.md) — dispatcher pinned at 100% CPU; replace the per-request DB scan with a deque + lease heap

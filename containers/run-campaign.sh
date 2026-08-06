@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Runs ON mercury, invoked by deploy-mercury.sh. Archives any prior results.db
-# (so a new campaign doesn't mix with / retire an earlier experiment), rebuilds
-# the pipeline image, then runs the continuous multi-protocol campaign. Uses
-# system python3 for orchestration; the heavy work is inside the podman image.
+# Campaign entrypoint. Run it from the repo root on whichever machine is doing
+# the work. Archives any prior results.db (so a new campaign doesn't mix with /
+# retire an earlier experiment), rebuilds the pipeline image, then runs the
+# continuous multi-protocol campaign. Uses system python3 for orchestration; the
+# heavy work is inside the podman image.
+#
+# It runs in the foreground; detaching is the caller's business. Under tmux, or:
+#   setsid bash containers/run-campaign.sh N > runs/continuous.log 2>&1 &
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
