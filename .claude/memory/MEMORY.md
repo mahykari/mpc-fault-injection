@@ -35,10 +35,12 @@
 - [Seeded-bug campaign result](project_seeded_bug_campaign_result.md) — 80k run done on mercury; bugs only when subprocessor_check+beaver_check both off
 - [Inspect in worktree](feedback_inspect_in_worktree.md) — read a branch's files in its own worktree; no merge-sim from master
 - [Shamir SSL gap](project_shamir_ssl_gap.md) — malicious-shamir blocked on per-run SSL cert provisioning; spdz2k proven caught
-- [Mercury deploy](project_mercury_deploy.md) — no uv on mercury; host runs system python3; deploy via ./containers/deploy-mercury.sh
+- [Mercury is a peer clone](project_mercury_deploy.md) — no rsync/deploy script; ssh in and work there; no uv, host runs system python3
 - [Party-count grid](project_party_count_grid.md) — campaign spreads protocol x party-count (3,5,7,9); shamir even-n verified OK; runs labeled by n_parties
 - [Simple commands](feedback_simple_commands.md) — no wizard one-liners; one simple command at a time, or explain it first
 - [Session state 2026-07-09](project_session_state_2026_07_09.md) — 2M campaign running on mercury; reaping fix landed; server underloaded, next = more instances / drop round barrier
 - [Session state 2026-07-13](project_session_state_2026_07_13.md) — campaign stopped at 21k; 66% caught / 20% honest_invalid / 14% inert / 0 bug; honest_invalid = mascot+spdz2k at n=9, likely timeouts
 - [Dispatcher pull model](project_dispatcher_pull_model.md) — round barrier replaced by HTTP dispatcher + long-lived pull workers; store.py is queue and results in one
 - [Next: in-memory queue](project_next_task_in_memory_queue.md) — dispatcher pinned at 100% CPU; replace the per-request DB scan with a deque + lease heap
+- [Memory lives in the repo](project_memory_in_repo.md) — .claude/memory/ tracked + symlinked by link-memory.sh; run once per machine; repo is public
+- [Drop it means drop it](feedback_drop_it_means_drop_it.md) — when a mechanism is no longer needed, delete it; no renamed or reduced survivor
