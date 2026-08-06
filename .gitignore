@@ -27,9 +27,13 @@ python-circil/
 # Per-run artifacts (.bc/.sch, party stdout/stderr, report.json)
 runs/
 
-# Claude Code runtime state (only .claude/agents/ is tracked)
+# Claude Code runtime state. .claude/ is tracked selectively: agents, commands,
+# hooks, scripts, settings, and memory/ are in git; these are local-only.
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+.claude/contractor
+.claude/guess.md
+.claude/memory/*.bak/
 
 # Local-only Claude Code notes and per-task briefings (copied into each
 # worktree via .worktreeinclude). Not for git history.

@@ -114,6 +114,20 @@ Ground truth for real bugs: "Rushing at SPDZ" (ePrint 2025/789) — missing MAC 
 
 `.claude/agents/mpc-explore.md` is the MPC-protocols exploration subagent (Sonnet by default). Dispatch it via the Agent tool with `subagent_type: mpc-explore` when a question needs deep MPC knowledge + code inspection in `./MP-SPDZ/` (tracing a check, explaining a protocol step, mapping injection points, translating paper notation). Use Opus only if the user asks for it.
 
+## Machines and memory
+
+Project memory lives in the repo at `.claude/memory/`, not in `~/.claude`. The
+harness derives its memory path from the cwd, so each machine and worktree gets
+a different slug; `.claude/scripts/link-memory.sh` symlinks that path at the
+main worktree's `.claude/memory`. **Run it once per machine.** After that,
+memories are ordinary tracked files: they move by `git pull` / `git push`, and
+conflicts show up in `MEMORY.md` like any other merge.
+
+**mercury is a peer clone, not a deploy target.** It has its own checkout and
+its own GitHub key. There is no rsync, no remote invoke, no deploy script; ssh
+in and work there. `containers/run-campaign.sh` is the campaign entrypoint, run
+from the repo root on whichever machine is doing the work.
+
 ## Working conventions from the notes
 
 - `notes/reading-list.md` explicitly marks papers as "read now", "read if needed", and "don't read". Respect this — don't push the user toward papers flagged as not-our-problem (FHE internals, ZK).
