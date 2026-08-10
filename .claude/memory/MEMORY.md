@@ -34,7 +34,7 @@
 - [Session 2026-06-29](project_session_2026_06_29.md) — retry, semi-rerun, protocols worktrees + 80k campaign; merge branches + smoke-test next
 - [Seeded-bug campaign result](project_seeded_bug_campaign_result.md) — 80k run done on mercury; bugs only when subprocessor_check+beaver_check both off
 - [Inspect in worktree](feedback_inspect_in_worktree.md) — read a branch's files in its own worktree; no merge-sim from master
-- [Shamir SSL gap](project_shamir_ssl_gap.md) — malicious-shamir blocked on per-run SSL cert provisioning; spdz2k proven caught
+- [Shamir SSL gap](project_shamir_ssl_gap.md) — RESOLVED in ca07dd0 (per-run cert provisioning); shamir and spdz2k both proven caught at smoke scale
 - [Mercury is a peer clone](project_mercury_deploy.md) — no rsync/deploy script; ssh in and work there; no uv, host runs system python3
 - [Party-count grid](project_party_count_grid.md) — campaign spreads protocol x party-count (3,5,7,9); shamir even-n verified OK; runs labeled by n_parties
 - [Simple commands](feedback_simple_commands.md) — no wizard one-liners; one simple command at a time, or explain it first
@@ -45,4 +45,6 @@
 - [Memory lives in the repo](project_memory_in_repo.md) — .claude/memory/ tracked + symlinked by link-memory.sh; run once per machine; repo is public
 - [Drop it means drop it](feedback_drop_it_means_drop_it.md) — when a mechanism is no longer needed, delete it; no renamed or reduced survivor
 - [Campaign disk blowup 2026-08-06](project_campaign_disk_blowup.md) — 2M-run campaign died at 15% on a full disk; MP-SPDZ Memory-p-P dumps = 1.1T; 82% caught / 18% inert / 0 bug at 305k
-- [Session state 2026-08-06](project_session_state_2026_08_06.md) — memory-dump fix on dispatcher-pull-model, settings on master, neither pushed; image needs a rebuild
+- [Session state 2026-08-06](project_session_state_2026_08_06.md) — next: restore the tree, rebuild the image, run a ~1000-case sanity campaign via dynamic workflow
+- [Campaign launch gotchas](project_campaign_launch_gotchas.md) — `--runs` is per grid point, not total; a new campaign reattaches to the old campaign.db unless you archive it
+- [Settings reload split](reference_settings_reload.md) — allow/deny apply live mid-session, defaultMode only at session start

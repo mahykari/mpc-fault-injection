@@ -1,29 +1,29 @@
 ---
 name: project_session_state_2026_08_06
-description: Session end 2026-08-06 — where the branches, settings, and container image stand
+description: Pending task as of 2026-08-10 — restore the tree, rebuild the image, run a ~1000-case sanity campaign
 metadata:
   type: project
 ---
 
-Picking up from here:
+**Next task, agreed 2026-08-10:** restore the working tree to HEAD, then fire a
+very small campaign (~1000 cases) to sanity-check the memory-dump fix, driven by
+a dynamic workflow. Read [[project_campaign_launch_gotchas]] before sizing or
+launching it.
 
-- `cdf5540` on `dispatcher-pull-model` — the `-o no_memory_output` fix. See
-  [[project_campaign_disk_blowup]].
-- `3270fde` on `master` — permissions flattened to `bypassPermissions` plus a
-  short deny list, and the Stop hook's librarian path made absolute. It was
-  relative, resolved only from the repo root, and failed with "command not
-  found", so librarian mode never fired.
-- Cherry-picked onto `dispatcher-pull-model` as `a44e875`, so both fixes are on
-  that branch and the settings are live there. Nothing is pushed.
+What the fix has and has not been through: one case was smoke-tested by
+bind-mounting `pipeline/` over the image copy — 0 `Memory-*` files, run dir 68K,
+verdict unchanged. It has never run through a rebuilt image or a real campaign.
+`./containers/build.sh pipeline` is the blocker. See
+[[project_campaign_disk_blowup]].
 
-**The settings only take effect on the branch that carries them.** A session
-started on a branch without that commit reads the old allowlist.
+On `dispatcher-pull-model`: `cdf5540` (`-o no_memory_output`), `a44e875`
+(settings: `bypassPermissions` + deny list, absolute librarian hook path),
+`d5fab13` (memory). `3270fde` is the same settings commit on `master`, from
+before the cherry-pick. Nothing is pushed.
 
-`.claude/contractor` is untracked and present, which disarms `edit-gate.sh`
-entirely — the main thread can edit and teaching mode is off. Delete the file
-to put teaching mode back.
+Working tree carries a stale `.gitignore` / `CLAUDE.md` diff that would revert
+`0b72e99` — `git restore` those two, they are not real work.
+`.claude/contractor` is present and untracked, which short-circuits
+`edit-gate.sh` and keeps teaching mode off; delete it to re-arm.
 
-The container image still has the pre-fix code baked into `/app`. Workers keep
-dumping memory until `./containers/build.sh pipeline` reruns.
-
-Disk after the wipe: 59% used, 1.4T free on `/home`.
+Disk: 59% used, 1.4T free on `/home`, all 305k run dirs gone.
