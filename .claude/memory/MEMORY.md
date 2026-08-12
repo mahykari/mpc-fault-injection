@@ -39,12 +39,13 @@
 - [Party-count grid](project_party_count_grid.md) — campaign spreads protocol x party-count (3,5,7,9); shamir even-n verified OK; runs labeled by n_parties
 - [Simple commands](feedback_simple_commands.md) — no wizard one-liners; one simple command at a time, or explain it first
 - [Session state 2026-07-09](project_session_state_2026_07_09.md) — 2M campaign running on mercury; reaping fix landed; server underloaded, next = more instances / drop round barrier
-- [Session state 2026-07-13](project_session_state_2026_07_13.md) — campaign stopped at 21k; 66% caught / 20% honest_invalid / 14% inert / 0 bug; honest_invalid = mascot+spdz2k at n=9, likely timeouts
+- [Session state 2026-07-13](project_session_state_2026_07_13.md) — campaign stopped at 21k; 66% caught / 20% honest_invalid / 14% inert / 0 bug; honest_invalid = mascot+spdz2k at n=9 (cause found 2026-08-10, see n=9 PID limit)
 - [Dispatcher pull model](project_dispatcher_pull_model.md) — round barrier replaced by HTTP dispatcher + long-lived pull workers; store.py is queue and results in one
 - [Next: in-memory queue](project_next_task_in_memory_queue.md) — dispatcher pinned at 100% CPU; replace the per-request DB scan with a deque + lease heap
 - [Memory lives in the repo](project_memory_in_repo.md) — .claude/memory/ tracked + symlinked by link-memory.sh; run once per machine; repo is public
 - [Drop it means drop it](feedback_drop_it_means_drop_it.md) — when a mechanism is no longer needed, delete it; no renamed or reduced survivor
 - [Campaign disk blowup 2026-08-06](project_campaign_disk_blowup.md) — 2M-run campaign died at 15% on a full disk; MP-SPDZ Memory-p-P dumps = 1.1T; 82% caught / 18% inert / 0 bug at 305k
-- [Session state 2026-08-06](project_session_state_2026_08_06.md) — next: restore the tree, rebuild the image, run a ~1000-case sanity campaign via dynamic workflow
+- [n=9 PID limit](project_n9_pids_limit.md) — n=9 honest_invalid was podman's 2048 PID cap deadlocking MP-SPDZ, not MPC cost; `--pids-limit 0`
+- [Session state 2026-08-10](project_session_state_2026_08_10.md) — 2M campaign running clean after the PID fix; smoke was 1008/1008 with zero honest_invalid
 - [Campaign launch gotchas](project_campaign_launch_gotchas.md) — `--runs` is per grid point, not total; a new campaign reattaches to the old campaign.db unless you archive it
 - [Settings reload split](reference_settings_reload.md) — allow/deny apply live mid-session, defaultMode only at session start
