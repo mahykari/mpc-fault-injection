@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pipeline.circil as _circil_path_setup  # noqa: F401
 from random import Random
+from typing import Callable
 
 import circil.ir.types as IRType  # type: ignore[import-not-found]
 from circil.fuzzer.builtin_operators import Builtins  # type: ignore[import-not-found]
@@ -16,12 +17,17 @@ from circil.fuzzer.config import FuzzerConfig  # type: ignore[import-not-found]
 from circil.fuzzer.simple import SimpleCircuitFuzzer  # type: ignore[import-not-found]
 
 from pipeline.config import NeedsGenerator
-from pipeline.types import CircilProgram
+from pipeline.matrix import Matrix, matrix_specs
+from pipeline.types import CircilProgram, ProgramFamily
 
 # CircIL bounds emitted constants by this modulo. Kept small (Mersenne
 # prime 2^31 - 1) so constants comfortably fit MP-SPDZ's default field
 # and the translator can emit them as plain `sint(<int>)` literals.
 FIELD_MODULO = 2**31 - 1
+
+# The matrix family carries 16 shape-specific custom functions; at the
+# field family's depth the trees blow up into thousands of nodes.
+MATRIX_EXPRESSION_DEPTH = 4
 
 
 def _fuzzer_config(config: NeedsGenerator) -> FuzzerConfig:
@@ -43,9 +49,35 @@ def _fuzzer_config(config: NeedsGenerator) -> FuzzerConfig:
   )
 
 
+def _matrix_fuzzer_config(config: NeedsGenerator) -> FuzzerConfig:
+  return FuzzerConfig(
+    max_expression_depth=MATRIX_EXPRESSION_DEPTH,
+    min_assertions=0, max_assertions=0,
+    min_circuit_input_signals=2, max_circuit_input_signals=10,
+    min_circuit_output_signals=1, max_circuit_output_signals=5,
+    probability_boundary_value=0.1,
+    disable_field_modulo_boundary_value=True,
+    ternary_expression_types=[],
+    input_signal_types=[Matrix],
+    output_signal_types=[Matrix],
+    allowed_generic_concrete_types=[IRType.Field],
+    enable_fixed_size_array=False,
+    max_lambda_depth=0,
+    probability_weight_let=config.let_probability,
+    custom_functions=matrix_specs() + [Builtins.MUL, Builtins.SUB, Builtins.ADD],
+  )
+
+
+_CONFIG_BUILDERS: dict[ProgramFamily, Callable[[NeedsGenerator], FuzzerConfig]] = {
+  "field": _fuzzer_config,
+  "matrix": _matrix_fuzzer_config,
+}
+
+
 def generate_program(config: NeedsGenerator) -> CircilProgram:
   rng = Random(config.seed.value)
-  circuit = SimpleCircuitFuzzer(FIELD_MODULO, rng, _fuzzer_config(config)).run()
+  fuzzer_config = _CONFIG_BUILDERS[config.program_family](config)
+  circuit = SimpleCircuitFuzzer(FIELD_MODULO, rng, fuzzer_config).run()
   print(
     f"[generator] CircIL circuit (seed={config.seed.value}, "
     f"inputs={len(circuit.inputs)}, "

@@ -17,7 +17,7 @@ tools = [
 [tool.mypy]
 strict = true
 python_version = "3.11"
-files = ["pipeline", "main.py"]
+files = ["pipeline", "main.py", "tests"]
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

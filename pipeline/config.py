@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Protocol as View
 
 from pipeline.protocols import PROTOCOL_SPECS, ProtocolSpec
-from pipeline.types import Protocol, Seed
+from pipeline.types import ProgramFamily, Protocol, Seed
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class Config:
   seeded_bug_binary: bool = False
   expression_depth: int = 20
   let_probability: float = 0.6
+  program_family: ProgramFamily = "field"
   instance_id: int = 0
   combo: str = "baseline"
 
@@ -121,6 +122,8 @@ class NeedsGenerator(View):
   def expression_depth(self) -> int: ...
   @property
   def let_probability(self) -> float: ...
+  @property
+  def program_family(self) -> ProgramFamily: ...
 
 class NeedsInjector(View):
   @property

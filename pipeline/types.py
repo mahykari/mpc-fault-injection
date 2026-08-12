@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 Protocol = Literal["mascot", "semi", "spdz2k", "malicious-shamir"]
 VerdictCategory = Literal["caught", "inert", "aborted", "honest_invalid", "bug"]
+ProgramFamily = Literal["field", "matrix"]
 
 
 @dataclass(frozen=True)
