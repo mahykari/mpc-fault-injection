@@ -24,6 +24,10 @@ RUNS_DIR = REPO_ROOT / "runs"
 DEFAULT_IMAGE = "mpspdz-pipeline:v0.4.2"
 DEFAULT_NETWORK = "fuzz-net"
 DEFAULT_DISPATCHER = "http://dispatcher:8080"
+# A party spawns ~230 threads, so a 9-party run needs ~2050 and podman's 2048
+# default denies the last few. MP-SPDZ does not fail on that, it deadlocks:
+# peers sit in accept() for a party whose connection thread was never created.
+PIDS_UNLIMITED = "0"
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,7 +49,7 @@ def ensure_network(name: str) -> None:
 
 
 def resource_opts(cpus: str | None, memory: str | None) -> list[str]:
-  opts = []
+  opts = ["--pids-limit", PIDS_UNLIMITED]
   if cpus is not None:
     opts += ["--cpus", cpus]
   if memory is not None:
