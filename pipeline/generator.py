@@ -36,7 +36,7 @@ def _fuzzer_config(config: NeedsGenerator) -> FuzzerConfig:
     input_signal_types=[IRType.Field],
     output_signal_types=[IRType.Field],
     allowed_generic_concrete_types=[IRType.Field],
-    enable_fixed_size_array=False,
+    enable_array=False,
     max_lambda_depth=0,
     probability_weight_let=config.let_probability,
     custom_functions=[Builtins.MUL, Builtins.SUB, Builtins.ADD],
