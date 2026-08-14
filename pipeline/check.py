@@ -18,7 +18,7 @@ from circil.ir.node import (  # type: ignore[import-not-found]
 )
 from circil.ir.visitor import IRWalker  # type: ignore[import-not-found]
 
-from pipeline.matrix import FILL, MADD, MATMUL, TRANSPOSE, Matrix
+from pipeline.matrix import FILL, ADD, MATMUL, TRANSPOSE, Matrix
 
 
 class CircuitTypeError(Exception):
@@ -67,7 +67,7 @@ def _field_op_ok(args: list[Any], result: Any) -> bool:
 
 CALL_RULES: dict[str, CallRule] = {
   MATMUL: _matmul_ok,
-  MADD: _madd_ok,
+  ADD: _madd_ok,
   TRANSPOSE: _transpose_ok,
   FILL: _fill_ok,
   "+": _field_op_ok,

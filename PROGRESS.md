@@ -80,3 +80,75 @@ full run matched three times).
 Units 2 and 3 (`pipeline/rewrite/`). Translator arms for
 `matmul`/`madd`/`transpose`/`matrix_fill` — `pipeline/translator.py` still
 handles `+ - *` only, so matrix circuits cannot reach MP-SPDZ yet.
+
+## Unit 1 redone — value-parameterized Matrix (2026-08-15)
+
+python-circil was replaced with a real clone of
+`Rigorous-Software-Engineering/python-circil` (`main`); the old vendored copy
+sits at `python-circil.old/`. The new circil has a general template system, so
+the enumeration above is gone.
+
+### Done
+
+- `pipeline/matrix.py` rewritten against `circil.ir.templates`. `Matrix` is a
+  `Custom` with `rows`/`cols` value parameters (`None` = unspecified, matches
+  any). `MatrixTemplate` implements `resolve_type` / `extract_mappings` /
+  `signature_key` / `free_variables`. `_RequestMatrix` carries a `range` for a
+  dimension the solver has not pinned yet, mirroring `_RequestSizedString`.
+- `matrix_specs()` is now 3 shape-polymorphic specs, not 16 concrete ones:
+  `matmul` declares `m,k,n` and takes `Matrix<m,k>`, `Matrix<k,n>` -> `Matrix<m,n>`;
+  `add` declares `m,n`; `transpose` swaps to `Matrix<n,m>`.
+- `Custom.constructor()` is a `@staticmethod` in the new circil, so
+  `matrix_fill` became a templated spec with its own `rows`/`cols` parameters
+  instead of an instance method baking in a fixed shape.
+
+### Verified
+
+`uv run python -m tests`:
+
+```
+  ok   matrix_specs has 3 shape-polymorphic specs
+  ok   every spec's result shape follows from its operands
+  ok   200 generated circuits typecheck
+  ok   batch contains matmul (178)
+  ok   batch contains add (148)
+  ok   batch contains transpose (151)
+  ok   same seed generates an identical circuit twice
+  ok   hand-built transpose of product typechecks
+  ok   hand-built double transpose typechecks
+all suites passed
+```
+
+`uv run mypy` -> `Success: no issues found in 31 source files`.
+
+Shape variety over 60 circuits: all 16 shapes in 1..4 x 1..4 appear, none
+dominating (top: (1,3) 120, (3,4) 120, (1,1) 103). The value parameters really
+do vary; they are not collapsing to one shape.
+
+### Ambiguities resolved
+
+- **Dimension bounds.** Not specified. Chose `MIN_DIM=1`, `MAX_DIM=4`, enforced
+  by a `RangeConstraint` per parameter, because every circuit becomes an MP-SPDZ
+  program and matmul costs O(m*k*n) secret multiplications.
+- **`add` vs `madd`.** The first pass named it `madd` to dodge the builtin `+`.
+  Renamed to `add` per the brief, since the injection rule is written
+  `(matmul (add ?a ?r) ?b)`. No collision: the field builtin is `+`.
+- **Literal dimension against a solver range.** circil's `SizedStringTemplate`
+  randomises within the range in that branch; that contradicts the literal, so
+  `_extract_dim` returns the literal after checking it falls in the range.
+- **Type hint registration.** `BaseParser.register_templated_type` (a
+  `MatrixHint`) is what lets `matrix` appear in rewrite *patterns*. Not needed to
+  generate, so it is left for Unit 2.
+
+### Carried over, not mine
+
+`pipeline/config.py` (`NeedsRewriter`) and `pipeline/rewrite/` are leftovers
+from the Unit 2 that was stopped mid-write; both are excluded from this commit.
+`pipeline/rewrite/rearrange.py` got a one-word `MADD` -> `ADD` fix only so
+`mypy` stays green.
+
+### Known footgun
+
+`import pipeline.circil` puts `python-circil/` at the front of `sys.path`, and
+python-circil ships a top-level `tests` package. Import our `tests.*` first or
+it gets shadowed. `uv run python -m tests` is unaffected.

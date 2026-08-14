@@ -8,7 +8,7 @@ from typing import Any
 
 from pipeline.check import CircuitTypeError, call_names, check_circuit
 from pipeline.generator import generate_program
-from pipeline.matrix import MADD, MATMUL, TRANSPOSE, Matrix, matrix_specs
+from pipeline.matrix import ADD, MATMUL, TRANSPOSE, MatrixTemplate, matrix_specs
 from tests.support import (
   expect,
   hand_double_transpose,
@@ -34,23 +34,28 @@ def _fingerprint(circuit: Any) -> list[str]:
   )
 
 
+# Each spec's dimension variables must thread through operands to result:
+# matmul's inner dimension is shared and dropped, transpose swaps.
+WIRING = {
+  MATMUL: ((("m", "k"), ("k", "n")), ("m", "n")),
+  ADD: ((("m", "n"), ("m", "n")), ("m", "n")),
+  TRANSPOSE: ((("m", "n"),), ("n", "m")),
+}
+
+
+def _shape(infos: Any) -> tuple[Any, Any]:
+  template = infos.template if infos.template is not None else infos.type_spec
+  if not isinstance(template, MatrixTemplate):
+    raise TypeError("expected a MatrixTemplate, got %r" % (template,))
+  return (template.rows, template.cols)
+
+
 def _spec_table_consistent() -> bool:
   for spec in matrix_specs():
-    operands = [infos.type_spec for _, infos in spec.parameters]
-    result = spec.return_type()
-    if spec.name == MATMUL:
-      left, right = operands
-      ok = (left.cols == right.rows
-            and result.rows == left.rows and result.cols == right.cols)
-    elif spec.name == MADD:
-      left, right = operands
-      ok = bool(left.equiv(right)) and bool(left.equiv(result))
-    elif spec.name == TRANSPOSE:
-      operand = operands[0]
-      ok = result.rows == operand.cols and result.cols == operand.rows
-    else:
-      ok = False
-    if not all(isinstance(t, Matrix) for t in operands + [result]) or not ok:
+    operands, result = WIRING[spec.name]
+    if tuple(_shape(infos) for _, infos in spec.parameters) != operands:
+      return False
+    if _shape(spec.result[1]) != result:
       return False
   return True
 
@@ -58,7 +63,7 @@ def _spec_table_consistent() -> bool:
 def run() -> None:
   print("test_generation")
 
-  expect(len(matrix_specs()) == 16, "matrix_specs has 16 concrete specs")
+  expect(len(matrix_specs()) == 3, "matrix_specs has 3 shape-polymorphic specs")
   expect(_spec_table_consistent(), "every spec's result shape follows from its operands")
 
   seen: Counter[str] = Counter()
@@ -75,7 +80,7 @@ def run() -> None:
     print("    " + bad)
   expect(not violations, "%d generated circuits typecheck" % BATCH)
   expect(seen[MATMUL] > 0, "batch contains matmul (%d)" % seen[MATMUL])
-  expect(seen[MADD] > 0, "batch contains madd (%d)" % seen[MADD])
+  expect(seen[ADD] > 0, "batch contains add (%d)" % seen[ADD])
   expect(seen[TRANSPOSE] > 0, "batch contains transpose (%d)" % seen[TRANSPOSE])
 
   mismatched = [s for s in REPEAT_SEEDS
