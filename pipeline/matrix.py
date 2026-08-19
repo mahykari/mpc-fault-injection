@@ -9,14 +9,21 @@ call site.
 from __future__ import annotations
 
 import pipeline.circil as _circil_path_setup  # noqa: F401
+from dataclasses import dataclass
 from functools import cached_property
 from random import Random
-from typing import Any, Callable, Optional
+from typing import Any, Callable, ClassVar, Optional, cast
 
 import circil.ir.types as IRType  # type: ignore[import-not-found]
 from circil.ir.constraints import RangeConstraint  # type: ignore[import-not-found]
 from circil.ir.functions import FunctionSpecification  # type: ignore[import-not-found]
 from circil.ir.templates import TemplateType, TypeResolver  # type: ignore[import-not-found]
+from circil.rewrite.parser import (  # type: ignore[import-not-found]
+  ArgTypeHint,
+  BaseParser,
+  TemplatedTypeHint,
+  TypeHint,
+)
 from circil.utils import intersection, value_inclusion  # type: ignore[import-not-found]
 
 # Dimensions stay small: every generated circuit becomes an MP-SPDZ program,
@@ -313,3 +320,101 @@ def matrix_specs() -> list[Any]:
       .constrained_by(RangeConstraint("n", MIN_DIM, MAX_DIM))
     ),
   ]
+
+
+@dataclass
+class MatrixHint(TemplatedTypeHint):  # type: ignore[misc]
+  """`matrix<rows, cols>` inside a rewrite pattern.
+
+  Each slot is a literal or the name of a value variable. Matching binds
+  the name in `lookup`; the rewrite side reads it back, which is what
+  lets a rule state a transposed shape without computing types itself.
+  """
+  type_name: ClassVar[str] = "matrix"
+  allow_unspecified: ClassVar[bool] = True
+  args: ClassVar[list[ArgTypeHint]] = [ArgTypeHint.VALUE, ArgTypeHint.VALUE]
+
+  rows: Optional[str | int] = None
+  cols: Optional[str | int] = None
+
+  @staticmethod
+  def _read_dim(
+    slot: Optional[str | int],
+    fallback: Dim,
+    lookup: dict[str, Any],
+    value_of: Callable[[str, dict[str, Any]], Any],
+    of_value: Callable[[Any], Any],
+  ) -> Dim:
+    if slot is None:
+      return fallback
+    if isinstance(slot, int):
+      return slot
+    if slot in lookup:
+      return int(value_of(slot, lookup))
+    if fallback is None:
+      raise ValueError("dimension '%s' is unbound and the hint itself is unsized" % slot)
+    lookup[slot] = of_value(fallback)
+    return fallback
+
+  @staticmethod
+  def _bind_dim(
+    slot: Optional[str | int],
+    actual: Dim,
+    lookup: dict[str, Any],
+    value_of: Callable[[str, dict[str, Any]], Any],
+    of_value: Callable[[Any], Any],
+  ) -> bool:
+    if slot is None:
+      return True
+    if isinstance(slot, int):
+      return actual is None or actual == slot
+    if slot not in lookup:
+      if actual is None:
+        raise ValueError("cannot bind dimension '%s' against an unsized matrix" % slot)
+      lookup[slot] = of_value(actual)
+      return True
+    return actual is None or int(value_of(slot, lookup)) == actual
+
+  def type_of(
+    self,
+    type_hints: dict[str, Any],
+    lookup: dict[str, Any],
+    type_of_hint: Callable[[Any, dict[str, Any], dict[str, Any]], Any],
+    value_of: Callable[[str, dict[str, Any]], Any],
+    of_value: Callable[[Any], Any],
+  ) -> Any:
+    hint_type = cast("Matrix", self.hint)
+    rows = self._read_dim(self.rows, hint_type.rows, lookup, value_of, of_value)
+    cols = self._read_dim(self.cols, hint_type.cols, lookup, value_of, of_value)
+    return Matrix(rows, cols)
+
+  def check(
+    self,
+    expected: Any,
+    type_hints: dict[str, Any],
+    lookup: dict[str, Any],
+    check_type_hint: Callable[[Any, Any, dict[str, Any], dict[str, Any]], bool],
+    value_of: Callable[[str, dict[str, Any]], Any],
+    of_value: Callable[[Any], Any],
+  ) -> bool:
+    if not isinstance(expected, Matrix):
+      return False
+    return (
+      self._bind_dim(self.rows, expected.rows, lookup, value_of, of_value)
+      and self._bind_dim(self.cols, expected.cols, lookup, value_of, of_value)
+    )
+
+  @staticmethod
+  def of_args(args: list[Any]) -> Any:
+    if len(args) == 0:
+      return TypeHint(Matrix(None, None))
+    if len(args) != 2:
+      raise ValueError("matrix type hint takes exactly 2 arguments, got %d" % len(args))
+    if any(isinstance(arg, TypeHint) for arg in args):
+      raise ValueError("matrix dimensions cannot be type hints")
+    if all(isinstance(arg, int) and not isinstance(arg, bool) for arg in args):
+      return TypeHint(Matrix(args[0], args[1]))
+    return MatrixHint(Matrix(None, None), None, args[0], args[1])
+
+
+BaseParser.register_templated_type(MatrixHint)

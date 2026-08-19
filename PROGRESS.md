@@ -152,3 +152,62 @@ from the Unit 2 that was stopped mid-write; both are excluded from this commit.
 `import pipeline.circil` puts `python-circil/` at the front of `sys.path`, and
 python-circil ships a top-level `tests` package. Import our `tests.*` first or
 it gets shadowed. `uv run python -m tests` is unaffected.
+
+## Unit 2 — rearrangement rules as CircIL patterns (2026-08-19)
+
+Rules are CircIL `Rule(name, match, rewrite)` patterns, not the hand-rolled
+`matches`/`build` classes from the stopped run. Those files are deleted, not
+reduced: `engine.py`, `rearrange.py`, `sites.py`, `types.py` are gone. The
+`SiteIndex` scope machinery went with them, so Unit 3 will need its own scope
+test wherever `?r` sourcing lands.
+
+No circil patch was needed after all. `BaseParser.register_templated_type` is a
+plain static method mutating a class dict, so `pipeline.matrix.MatrixHint`
+registers itself at import time from our side.
+
+### Done
+
+- `pipeline/matrix.py` gains `MatrixHint(TemplatedTypeHint)`, modelled on the
+  built-in `ArrayHint`: two VALUE slots, each a literal or a `?name` bound in
+  `lookup`. Matching binds a dimension, the rewrite side reads it back, which
+  is how a rule states a transposed shape without computing types itself.
+- `pipeline/rewrite/rules.py` — `transpose-of-product`, `double-transpose-elim`,
+  `add-commute`.
+- `pipeline/rewrite/engine.py` — `rewrite_circuit(circuit, seed, amount)` over
+  `RuleBasedRewriter`; the library owns the walk and splice.
+- `tests/test_rules.py`, wired into `tests/__main__.py`.
+
+### Verified
+
+```
+test_rules
+  ok   transpose-of-product matches generated output (14 sites)
+  ok   double-transpose-elim matches generated output (6 sites)
+  ok   add-commute matches generated output (104 sites)
+  ok   120 rewritten circuits typecheck
+  ok   rules actually fired (173 applications)
+  ok   same seed rewrites identically
+```
+
+`uv run mypy` -> `Success: no issues found in 30 source files`.
+
+### The bug this nearly shipped with
+
+The first version of these rules matched the hand-built fixtures in
+`tests/support.py` and *nothing* the generator emits. Every check passed: the
+rules fired on fixtures, and "60 rewritten circuits typecheck" was true because
+zero rewrites happened. Only an explicit "rules actually fired" count caught it.
+
+Cause: a generated call carries **template arguments**, the resolved
+`with_generic_value` parameters, and `process_call_expression` requires
+`len(templates) == len(node.function.template_parameters)`. A pattern omitting
+the chevron list matches no generated call. Hand-built fixtures have none, so
+they matched. `(add<?m, ?n>:?t<matrix> ?a ?b)` is the correct form.
+
+The tests now measure site counts against generated circuits for this reason.
+
+### Left dirty
+
+`pipeline/config.py` still carries an unused `NeedsRewriter` view from the
+stopped run. `git checkout --` is on the deny list, so it is uncommitted rather
+than reverted.
