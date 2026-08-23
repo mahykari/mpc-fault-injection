@@ -321,32 +321,28 @@ build.sh bumped to match what is on disk; patch 0001 applies to 0.4.3 with a
 
 **1. The runtime prime does not match the compile.** `Prime.runtime_args` passes
 `-P <M127>` but `Prime.compile_args` is empty, so the program is compiled for
-the default 128-bit prime and then run under a 127-bit one. With the stock
-binaries this went unnoticed. With the patched build the honest run fails
-outright:
+MP-SPDZ's default prime and run under a 127-bit one. This is unchanged from
+master, so every previous campaign ran the same way.
 
-```
-Trying to run 127-bit computation (128-bit representation)
-Removing Player-Data//Mascot-Secrets-p-0-... because of MAC check failure
-Assertion `unlink(filename.c_str()) == 0' failed.
-```
+It is an asymmetry worth tidying, but it is **not** the failure originally
+written up here. A clean-room A/B, fresh `runs_root`, both stock and patched
+binaries, runs the honest twin correctly with `-P` in place. The
+`honest_invalid` reported earlier came from a polluted run directory: leftover
+`Mascot-Secrets-p-128-*` files from manual experiments run *without* `-P` become
+a stale cache under `-P`, which trips a MAC failure and then an assert in the
+cache-cleanup path, `unlink(filename.c_str()) == 0` at `Protocols/MAC_Check.hpp:165`.
 
-Drop the `-P` and the honest twin runs correctly. The fix is to make the two
-agree, not to drop the prime: pick one and pass it to both.
+**2. `mutated/Player-Data` is empty.** Also written up here as a MAC-key
+mismatch, also wrong. `OT/MascotMacKey.hpp:29` `read_or_generate` reads *that
+party's own* cached share or generates a fresh one and runs OT base setup with
+its peers. Shares are per-party by design; an empty directory is a supported
+path. Both parties printed that warning in runs that produced correct output.
 
-**2. `mutated/Player-Data` is empty**, so the corrupt party generates its own MAC
-key material rather than sharing the honest parties':
+**What is actually still blocking.** The mutated twin aborts before producing
+output, on a clean run directory, with both the stock and the patched binary.
+Patch 0001 was supposed to be exactly the fix for that, so either it is not
+taking effect in this build or something other than the program check is
+stopping the corrupt party. Undiagnosed.
 
-```
-No proper key material found in Player-Data//Mascot-Secrets-p-128-...-P1-2,
-generating from scratch
-```
-
-A twin differs in *bytecode*, not in keys. Until the mutated cwd is seeded from
-the same key material, every mutated run is comparing against a party that is
-not in the same protocol instance. `SslProvisioner` already does exactly this
-copy for protocols with `needs_ssl`; mascot has `needs_ssl=False` so nothing
-seeds it.
-
-Both are pre-existing and independent of the source-level work: the field family
-on the bytecode injector hits them too.
+The abort is pre-existing and independent of the source-level work: the field
+family on the bytecode injector hits it too, same seed.
