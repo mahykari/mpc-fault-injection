@@ -5,16 +5,19 @@ rewrites the circuit before translation, so honest and mutated are two
 separate compiles of two separate sources. The diff is DSL text rather
 than opcodes, which is legible.
 
-Until the injection rules land, the rule set is the rearrangements.
-Those are semantics-preserving, which makes this the control arm: a
-divergence between the twins is a harness defect, not a finding.
+`Config.mutation_kind` picks what the mutated twin gets. `inject`
+introduces terms the match did not bind and is the fuzzer. `rearrange`
+is semantics-preserving and is the control arm: a divergence under it
+is a harness defect, not a finding.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol as View
 
 from pipeline.config import NeedsInjector
-from pipeline.rewrite import REARRANGEMENTS, rewrite_circuit
+from pipeline.types import MutationKind
+from pipeline.rewrite import rewrite_circuit
+from pipeline.rewrite.inject import inject_circuit
 from pipeline.types import (
   CircilProgram,
   InjectionRecord,
@@ -27,6 +30,23 @@ MAX_REWRITES = 3
 # Source-layer records carry no tape.
 NO_TAPE = 0
 
+class Mutation(View):
+  """What both mutators return: a new circuit plus the rules that fired."""
+  @property
+  def circuit(self) -> Any: ...
+  @property
+  def rule_names(self) -> tuple[str, ...]: ...
+
+
+class Mutator(View):
+  def __call__(self, circuit: Any, seed: int, amount: int) -> Mutation: ...
+
+
+_MUTATORS: dict[MutationKind, Mutator] = {
+  "rearrange": rewrite_circuit,
+  "inject": inject_circuit,
+}
+
 
 class SourceInjector:
   def __init__(self, toolkit: Any, compiler: Any, config: NeedsInjector) -> None:
@@ -37,7 +57,8 @@ class SourceInjector:
   def inject(self, circil: CircilProgram, honest: MpspdzProgram) -> MutatedProgram:
     from pipeline.translator import translate_to_mpspdz
 
-    result = rewrite_circuit(
+    mutate = _MUTATORS[self._config.mutation_kind]
+    result = mutate(
       circil.circuit, seed=self._config.seed.value, amount=MAX_REWRITES
     )
     mutated_source = translate_to_mpspdz(CircilProgram(circuit=result.circuit))
@@ -60,5 +81,3 @@ class SourceInjector:
     return MutatedProgram(original=honest, mutated=mutated, record=record)
 
 
-def available_rules() -> tuple[Any, ...]:
-  return REARRANGEMENTS

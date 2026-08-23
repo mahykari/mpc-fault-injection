@@ -268,3 +268,85 @@ machine, same seed. The local `MP-SPDZ/bin/Linux-amd64/` binaries are stock, and
 twin runs need `patches/mpspdz/0001-noop-check-program.patch`, which only exists
 via the container build. `./containers/build.sh pipeline` is the next action and
 it is run by hand.
+
+## Unit 3 — injection rules (2026-08-23)
+
+### Done
+
+- `pipeline/rewrite/donors.py` — donor search. `donors_of_type(circuit,
+  before, wanted)` returns in-scope nodes of a type in a stable pre-order;
+  `pick_donor` takes one with a seeded RNG or returns None. Scope is
+  deliberately conservative: a donor is admissible only when every identifier
+  it mentions is a circuit input or the target of an earlier assignment, so
+  nothing reaching a `let`-bound name is ever spliced. That rejects donors that
+  would in fact be fine, which is the cheap direction to be wrong in.
+- `pipeline/rewrite/inject.py` — three rules. `matmul-add-donor` is
+  `(matmul ?a ?b) -> (matmul (add ?a ?r) ?b)`; `field-bump-donor` is the port of
+  the bump gadget, `a -> (a + r)`; `field-signflip` is the port of the sign-flip
+  gadget, `a -> (a * -1)`.
+- `pipeline/types.py` / `config.py` — `MutationKind = Literal["rearrange",
+  "inject"]`, default `"inject"`. `rearrange` keeps the control arm reachable.
+- `pipeline/source_injector.py` selects the mutator on that typed field.
+
+### Decision: injections are not CircIL patterns
+
+Unit 2's rules are patterns. These are not, and that is deliberate. A rewrite
+pattern can only build a term out of what the match bound or what `$r`
+synthesises, and a synthesised literal is exactly what an injected operand must
+not be. Matching and construction therefore both live in `inject.py`, so a rule
+has one mechanism rather than two.
+
+`field-signflip`'s `-1` stays a literal: it is the operator, not an injected
+operand, and it is what `mulsi r, r, -1` did.
+
+### Verified
+
+```
+  ok   40 injected circuits typecheck and translate
+  ok   injections change the circuit (38/40)
+  ok   matmul-add-donor fired (4)
+  ok   field-bump-donor fired (17)
+  ok   field-signflip fired (40)
+  ok   same seed injects identically
+  ok   every donor is in scope at its splice point
+```
+
+Suite is 31 checks over four modules. `uv run mypy` clean over 35 files.
+
+## Patched binary, and two things it turned up (2026-08-23)
+
+`./containers/build.sh patched` now builds MP-SPDZ 0.4.3 (Containerfile and
+build.sh bumped to match what is on disk; patch 0001 applies to 0.4.3 with a
+16-line offset). Binaries are in `MP-SPDZ/bin/Linux-amd64-patched/`.
+
+**1. The runtime prime does not match the compile.** `Prime.runtime_args` passes
+`-P <M127>` but `Prime.compile_args` is empty, so the program is compiled for
+the default 128-bit prime and then run under a 127-bit one. With the stock
+binaries this went unnoticed. With the patched build the honest run fails
+outright:
+
+```
+Trying to run 127-bit computation (128-bit representation)
+Removing Player-Data//Mascot-Secrets-p-0-... because of MAC check failure
+Assertion `unlink(filename.c_str()) == 0' failed.
+```
+
+Drop the `-P` and the honest twin runs correctly. The fix is to make the two
+agree, not to drop the prime: pick one and pass it to both.
+
+**2. `mutated/Player-Data` is empty**, so the corrupt party generates its own MAC
+key material rather than sharing the honest parties':
+
+```
+No proper key material found in Player-Data//Mascot-Secrets-p-128-...-P1-2,
+generating from scratch
+```
+
+A twin differs in *bytecode*, not in keys. Until the mutated cwd is seeded from
+the same key material, every mutated run is comparing against a party that is
+not in the same protocol instance. `SslProvisioner` already does exactly this
+copy for protocols with `needs_ssl`; mascot has `needs_ssl=False` so nothing
+seeds it.
+
+Both are pre-existing and independent of the source-level work: the field family
+on the bytecode injector hits them too.

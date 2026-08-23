@@ -13,6 +13,8 @@ Protocol = Literal["mascot", "semi", "spdz2k", "malicious-shamir"]
 VerdictCategory = Literal["caught", "inert", "aborted", "honest_invalid", "bug"]
 ProgramFamily = Literal["field", "matrix"]
 InjectionLayer = Literal["bytecode", "source"]
+# "rearrange" is the semantics-preserving control arm; "inject" is the fuzzer.
+MutationKind = Literal["rearrange", "inject"]
 
 
 @dataclass(frozen=True)

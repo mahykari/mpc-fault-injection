@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Protocol as View
 
 from pipeline.protocols import PROTOCOL_SPECS, ProtocolSpec
-from pipeline.types import InjectionLayer, ProgramFamily, Protocol, Seed
+from pipeline.types import InjectionLayer, MutationKind, ProgramFamily, Protocol, Seed
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ class Config:
   let_probability: float = 0.6
   program_family: ProgramFamily = "field"
   injection_layer: InjectionLayer = "bytecode"
+  mutation_kind: MutationKind = "inject"
   instance_id: int = 0
   combo: str = "baseline"
 
@@ -131,6 +132,8 @@ class NeedsInjector(View):
   def program_id(self) -> str: ...
   @property
   def injection_layer(self) -> InjectionLayer: ...
+  @property
+  def mutation_kind(self) -> MutationKind: ...
   @property
   def malicious_parties(self) -> list[int]: ...
   @property
