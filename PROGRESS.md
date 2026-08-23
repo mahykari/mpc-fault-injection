@@ -1,5 +1,28 @@
 # PROGRESS
 
+## Fix when merging to master
+
+Running list. These are things this branch changed or uncovered that master
+needs handled at merge time, not things already done here.
+
+- **Runtime prime does not match the compile prime.** `pipeline/protocols.py`:
+  `Prime.runtime_args` passes `-P <2^127-1>` while `Prime.compile_args` returns
+  `[]`, so every program is compiled for MP-SPDZ's default prime and executed
+  under a 127-bit one. Unchanged from master, so every campaign to date ran this
+  way, and it is benign in a clean run directory. Pick one prime and pass it to
+  both sides. Detail under "Patched binary" below.
+- **python-circil was replaced with the upstream clone.** Master's `pipeline/`
+  does not run against it unmodified: `FuzzerConfig.enable_fixed_size_array` is
+  now `enable_array`, `array_types_for_fixed_size_array` is
+  `array_element_types`, and `Custom.constructor()` is a `@staticmethod`
+  returning a templated spec rather than an instance method.
+- **MP-SPDZ moved 0.4.2 to 0.4.3.** `containers/Containerfile`,
+  `containers/build.sh` and `patches/mpspdz/README.md` are bumped here. Patch
+  0001 applies to 0.4.3 with a 16-line offset. Confirm before the merge lands.
+- **Two new Config defaults to agree on.** `injection_layer` defaults to
+  `"bytecode"` so the field family keeps working; `mutation_kind` defaults to
+  `"inject"`. Decide what master should ship.
+
 ## Unit 1 — Matrix type, spec table, repeatability suite (2026-08-12)
 
 ### Done
