@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from typing import Callable
 
-from tests import test_generation, test_rules
+from tests import test_generation, test_rules, test_translation
 
 SUITES: tuple[tuple[str, Callable[[], None]], ...] = (
   ("test_generation", test_generation.run),
   ("test_rules", test_rules.run),
+  ("test_translation", test_translation.run),
 )
 
 

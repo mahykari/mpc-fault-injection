@@ -1,78 +1,159 @@
-"""CircIL Circuit → MP-SPDZ Python DSL.
+"""CircIL Circuit to MP-SPDZ Python DSL.
 
-Subclasses CircIL's `EmptyVisitor`. The Generator's narrow FuzzerConfig
-means we only see four node kinds: `Integer`, `Identifier`,
-`CallExpression` (with op in `+ - *`), and `Assignment`. Anything else
-is a config drift — we raise rather than guess.
+Subclasses CircIL's `EmptyVisitor`. Every expression visitor pushes
+exactly one rendered string onto `_stack`; composing visitors pop their
+operands. A plain stack rather than one flat text buffer because matrix
+values cannot be expressed inline: `Matrix(r, c, sint)` is uninitialised
+on construction and needs a following `assign_all`, so a matrix-valued
+node emits statements and pushes the name of the temporary it built.
 
-Expression text is composed into a per-statement buffer (`_expr`):
-leaf visitors append their atom, composing visitors wrap with brackets
-and operators between child visits. At each `Assignment`, the buffer
-is flushed into the line list.
+Field arithmetic stays inline, so scalar circuits emit the same shape of
+source they always did.
 
-Inputs are baked as `sint(<index+1>)` literals; we don't go through
-`Input-P<n>.<id>` files because the twin-run only needs determinism,
-and the seed-driven Circuit already gives us that.
+Inputs are baked as literals rather than read from `Input-P<n>.<id>`
+files: the twin run only needs determinism, and the seed-driven Circuit
+already gives that.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import pipeline.circil as _circil_path_setup  # noqa: F401
 from circil.ir.visitor import EmptyVisitor  # type: ignore[import-not-found]
 
+from pipeline.circil_ir import shape_of
+from pipeline.matrix import ADD, FILL, MATMUL, TRANSPOSE
 from pipeline.types import CircilProgram, MpspdzSource
 
+FIELD_OPS = {"+", "-", "*"}
 
-_OPS = {"+", "-", "*"}
+# MP-SPDZ entry type for every secret value we emit.
+VALUE_TYPE = "sint"
+
+
+def _dims(shape: Any) -> tuple[int, int]:
+  """Concrete (rows, cols), or a refusal.
+
+  A shape still carrying `None` never resolved during generation, and
+  emitting it would produce a `Matrix(None, ...)` that only fails later
+  inside MP-SPDZ.
+  """
+  if shape.rows is None or shape.cols is None:
+    raise NotImplementedError("matrix with unresolved shape: %s" % shape)
+  return shape.rows, shape.cols
 
 
 class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
   def __init__(self) -> None:
     self.lines: list[str] = []
-    self._expr: list[str] = []
+    self._stack: list[str] = []
+    self._temps = 0
+
+  # -- emission helpers -------------------------------------------------
+
+  def _fresh(self) -> str:
+    self._temps += 1
+    return "_m%d" % self._temps
+
+  def _bind(self, expression: str) -> str:
+    """Assign `expression` to a fresh temporary and return its name."""
+    name = self._fresh()
+    self.lines.append("%s = %s" % (name, expression))
+    return name
+
+  def _operands(self, node: Any) -> list[str]:
+    for argument in node.arguments:
+      self.visit(argument)
+    popped = [self._stack.pop() for _ in node.arguments]
+    return list(reversed(popped))
+
+  # -- matrix arms ------------------------------------------------------
+
+  def _emit_fill(self, node: Any, operands: list[str]) -> str:
+    shape = shape_of(node)
+    if shape is None:
+      raise NotImplementedError("matrix_fill with no resolved shape")
+    rows, cols = _dims(shape)
+    name = self._fresh()
+    self.lines.append("%s = Matrix(%d, %d, %s)" % (name, rows, cols, VALUE_TYPE))
+    self.lines.append("%s.assign_all(%s)" % (name, operands[0]))
+    return name
+
+  def _emit_add(self, node: Any, operands: list[str]) -> str:
+    return self._bind("%s + %s" % (operands[0], operands[1]))
+
+  def _emit_matmul(self, node: Any, operands: list[str]) -> str:
+    return self._bind("%s.dot(%s)" % (operands[0], operands[1]))
+
+  def _emit_transpose(self, node: Any, operands: list[str]) -> str:
+    return self._bind("%s.transpose()" % operands[0])
+
+  # Keyed by the CircIL function name so a new op is one table row.
+  _MATRIX_ARMS: dict[str, Callable[[Any, Any, list[str]], str]] = {
+    FILL: _emit_fill,
+    ADD: _emit_add,
+    MATMUL: _emit_matmul,
+    TRANSPOSE: _emit_transpose,
+  }
+
+  # -- signals ----------------------------------------------------------
+
+  def _bind_input(self, signal: Any, index: int) -> None:
+    literal = "%s(%d)" % (VALUE_TYPE, index + 1)
+    shape = shape_of(signal)
+    if shape is None:
+      self.lines.append("%s = %s" % (signal.name, literal))
+      return
+    rows, cols = _dims(shape)
+    self.lines.append(
+      "%s = Matrix(%d, %d, %s)" % (signal.name, rows, cols, VALUE_TYPE)
+    )
+    self.lines.append("%s.assign_all(%s)" % (signal.name, literal))
+
+  def _reveal_output(self, signal: Any) -> None:
+    revealed = "reveal_nested()" if shape_of(signal) is not None else "reveal()"
+    self.lines.append(
+      "print_ln('%s: %%s', %s.%s)" % (signal.name, signal.name, revealed)
+    )
+
+  # -- visitors ---------------------------------------------------------
 
   def visit_circuit(self, node: Any) -> None:
-    for idx, sig in enumerate(node.inputs):
-      self.lines.append(f"{sig.name} = sint({idx + 1})")
-    for stmt in node.statements:
-      self.visit(stmt)
-    for sig in node.outputs:
-      self.lines.append(f"print_ln('{sig.name}: %s', {sig.name}.reveal())")
+    for index, signal in enumerate(node.inputs):
+      self._bind_input(signal, index)
+    for statement in node.statements:
+      self.visit(statement)
+    for signal in node.outputs:
+      self._reveal_output(signal)
 
   def visit_assignment(self, node: Any) -> None:
-    self._expr = []
     self.visit(node.rhs)
-    self.lines.append(f"{node.lhs.name} = {''.join(self._expr)}")
+    self.lines.append("%s = %s" % (node.lhs.name, self._stack.pop()))
 
   def visit_integer(self, node: Any) -> None:
-    # CircIL `Integer` in a Field context is a field element; emit as
-    # `sint(<value>)` so any expression with at least one constant
-    # operand still produces an sint downstream. (Plain Python `int`
-    # would propagate and break `.reveal()` at the output.)
-    self._expr.append(f"sint({node.value})")
+    # A CircIL Integer in field position is a field element. Emitting a
+    # plain Python int would propagate and break `.reveal()` downstream.
+    self._stack.append("%s(%d)" % (VALUE_TYPE, node.value))
 
   def visit_identifier(self, node: Any) -> None:
-    self._expr.append(node.name)
+    self._stack.append(node.name)
 
   def visit_call_expression(self, node: Any) -> None:
-    op = node.function.name
-    if op not in _OPS:
-      raise NotImplementedError(f"unsupported op: {op}")
-    if len(node.arguments) != 2:
-      raise NotImplementedError(f"op {op} expects 2 args, got {len(node.arguments)}")
-    self._expr.append("(")
-    self.visit(node.arguments[0])
-    self._expr.append(f" {op} ")
-    self.visit(node.arguments[1])
-    self._expr.append(")")
+    name = node.function.name
+    arm = self._MATRIX_ARMS.get(name)
+    if arm is not None:
+      self._stack.append(arm(self, node, self._operands(node)))
+      return
+    if name not in FIELD_OPS:
+      raise NotImplementedError("unsupported op: %s" % name)
+    operands = self._operands(node)
+    if len(operands) != 2:
+      raise NotImplementedError("op %s expects 2 args, got %d" % (name, len(operands)))
+    self._stack.append("(%s %s %s)" % (operands[0], name, operands[1]))
 
   def visit_let_expression(self, node: Any) -> None:
-    buffer = self._expr
-    self._expr = []
     self.visit(node.value)
-    self.lines.append(f"{node.var} = {''.join(self._expr)}")
-    self._expr = buffer
+    self.lines.append("%s = %s" % (node.var, self._stack.pop()))
     self.visit(node.body)
 
 
@@ -80,7 +161,7 @@ def translate_to_mpspdz(program: CircilProgram) -> MpspdzSource:
   walker = MpspdzTranslation()
   walker.visit(program.circuit)
   source = "\n".join(walker.lines) + "\n"
-  print(f"[translator] emitted {len(walker.lines)} lines of MP-SPDZ DSL:")
+  print("[translator] emitted %d lines of MP-SPDZ DSL:" % len(walker.lines))
   for line in walker.lines:
-    print(f"  | {line}")
+    print("  | %s" % line)
   return MpspdzSource(source=source)
