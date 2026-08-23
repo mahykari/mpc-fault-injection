@@ -361,11 +361,38 @@ party's own* cached share or generates a fresh one and runs OT base setup with
 its peers. Shares are per-party by design; an empty directory is a supported
 path. Both parties printed that warning in runs that produced correct output.
 
-**What is actually still blocking.** The mutated twin aborts before producing
-output, on a clean run directory, with both the stock and the patched binary.
-Patch 0001 was supposed to be exactly the fix for that, so either it is not
-taking effect in this build or something other than the program check is
-stopping the corrupt party. Undiagnosed.
+**What is actually still blocking: preprocessing volume.** Diagnosed
+2026-08-23. The mutated twin aborts because honest and mutated parties disagree
+about how much offline material the program needs:
+
+```
+Fatal error in OT thread: Bad receive buffer size.
+  Size transmitted: 175104 bytes
+  Size of buffer:   178176 bytes
+```
+
+MASCOT sizes its offline phase to the program it is running. Two parties running
+two different programs size it differently, and the channel desynchronises
+before any online computation happens. Patch 0001 gets past the fingerprint
+check; this is the next wall behind it.
+
+The bytecode gadgets never hit this. `addsi` / `mulsi` take an immediate
+operand and consume no triples, so a bump or a sign flip left the preprocessing
+volume byte-identical. That property was doing more work than the note in
+`single_variable_bump.py` lets on. A source-level mutation has no such
+guarantee: it changes the program, and the program is what the offline phase is
+sized from.
+
+Two consequences. Any source-level mutation has to be preprocessing-neutral, or
+the twin design needs the offline phase pinned independently of the program.
+Neither is a patch to `check_program`.
+
+A second, smaller asymmetry sits in front of it: the executor runs the honest
+twin first, which populates `honest/Player-Data` with an OT secrets cache. The
+mutated twin then has one party reading a cache and skipping base-OT setup while
+the other regenerates it interactively, so they are in different phases and the
+honest side reports `Timed out waiting for peer`. Seeding `mutated/Player-Data`
+from `honest/` clears that one and exposes the buffer-size error above.
 
 The abort is pre-existing and independent of the source-level work: the field
 family on the bytecode injector hits it too, same seed.
