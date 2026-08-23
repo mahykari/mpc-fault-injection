@@ -211,3 +211,60 @@ The tests now measure site counts against generated circuits for this reason.
 `pipeline/config.py` still carries an unused `NeedsRewriter` view from the
 stopped run. `git checkout --` is on the deny list, so it is uncommitted rather
 than reverted.
+
+## Step 1 and 2 — translator, source-layer injector (2026-08-23)
+
+MP-SPDZ v0.4.3 is now on disk at `MP-SPDZ/` (gitignored). There was no copy
+to symlink: the master checkout has none either. Note the Containerfile still
+builds 0.4.2 and `patches/mpspdz/` is written against a clean 0.4.2 tree, so
+local and container disagree until one moves.
+
+### Translator
+
+`pipeline/translator.py` rewritten. Expression rendering moved from a single
+text buffer to a value stack, because a matrix literal is two statements rather
+than an expression: `Matrix(r, c, sint)` is uninitialised on construction and
+needs a following `assign_all`. A matrix-valued node emits statements and pushes
+the name of the temporary it built. Field arithmetic still renders inline.
+
+API, read out of `MP-SPDZ/Compiler/types.py` rather than guessed:
+`Matrix(rows, columns, value_type)` 7758, `assign_all` 6851, `__add__` 7109,
+`dot` 7201, `transpose` 7501, `reveal_nested` 7655.
+
+### Source-layer injector
+
+- `pipeline/types.py` — `InjectionLayer = Literal["bytecode", "source"]`.
+- `pipeline/config.py` — `Config.injection_layer`, default `"bytecode"`.
+- `pipeline/source_injector.py` — rewrites the CircIL AST, translates and
+  compiles the mutated twin separately. Rule set is currently the
+  rearrangements, so this is the control arm until injection rules land.
+- `pipeline/__init__.py` — `_INJECTORS` selects on the typed field.
+
+The bytecode injector is retired, not deleted: still wired, still type-checked,
+still the default, and it keeps serving the field family.
+
+`Injector._check_sync_invariant` no longer raises. A diverged signature is
+printed and the run continues.
+
+### Verified
+
+Suite is 24 checks across three modules, `uv run mypy` clean over 32 files.
+`test_translation` compiles honest and rewritten circuits against real MP-SPDZ
+and reports skipped when `MP-SPDZ/` is absent.
+
+End-to-end, matrix family, source injection, mascot n=2, seed 3: the honest twin
+runs and reveals correct matrices.
+
+```
+out0: [[219416777170372848, ...4 wide], ...3 rows]
+out2: [[2652866328, 2652866328], ...3 rows]
+```
+
+### Blocked on the patched binary
+
+The mutated twin aborts before producing output. Not a defect in this work: the
+established field family on the bytecode injector aborts identically on this
+machine, same seed. The local `MP-SPDZ/bin/Linux-amd64/` binaries are stock, and
+twin runs need `patches/mpspdz/0001-noop-check-program.patch`, which only exists
+via the container build. `./containers/build.sh pipeline` is the next action and
+it is run by hand.

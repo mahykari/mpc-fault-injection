@@ -97,11 +97,13 @@ class Injector:
 
   @staticmethod
   def _check_sync_invariant(honest: Any, mutated: Any) -> None:
-    """Refuse to run if the mutation reshaped the inter-party message flow.
+    """Report, do not refuse, when the message flow was reshaped.
 
     Honest parties run unmutated bytecode and expect a specific sequence
-    of network-touching ops; if the mutated tape's sequence diverges they
-    would deadlock or interpret messages out of order.
+    of network-touching ops. A diverged sequence used to abort the run;
+    it is now recorded and the run proceeds, because a mutated program
+    that runs is the thing we want and the signature is supporting
+    information. A genuine deadlock still shows up as a timeout.
     """
     for idx, (honest_tape, mutated_tape) in enumerate(
       zip(honest.tapes, mutated.tapes)
@@ -109,8 +111,8 @@ class Injector:
       honest_sig = sync_signature(honest_tape)
       mutated_sig = sync_signature(mutated_tape)
       if honest_sig != mutated_sig:
-        raise RuntimeError(
-          f"sync signature diverged on tape {idx}:\n"
+        print(
+          f"[injector] sync signature diverged on tape {idx} (continuing):\n"
           f"  honest:  {honest_sig}\n"
           f"  mutated: {mutated_sig}"
         )

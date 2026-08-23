@@ -12,6 +12,7 @@ from typing import Any, Literal
 Protocol = Literal["mascot", "semi", "spdz2k", "malicious-shamir"]
 VerdictCategory = Literal["caught", "inert", "aborted", "honest_invalid", "bug"]
 ProgramFamily = Literal["field", "matrix"]
+InjectionLayer = Literal["bytecode", "source"]
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,9 @@ class MpspdzProgram:
 
 @dataclass(frozen=True)
 class InjectionRecord:
+  # `tape_index` and `gadget_kinds` are bytecode-layer names. The source
+  # layer reuses them rather than forking the record: it reports 0 and the
+  # applied rule names, so reports and the results DB keep one shape.
   tape_index: int
   party_ids: tuple[int, ...]
   gadget_kinds: tuple[str, ...]
