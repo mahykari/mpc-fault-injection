@@ -44,3 +44,4 @@
 - [Next: in-memory queue](project_next_task_in_memory_queue.md) — dispatcher pinned at 100% CPU; replace the per-request DB scan with a deque + lease heap
 - [Memory lives in the repo](project_memory_in_repo.md) — .claude/memory/ tracked + symlinked by link-memory.sh; run once per machine; repo is public
 - [Drop it means drop it](feedback_drop_it_means_drop_it.md) — when a mechanism is no longer needed, delete it; no renamed or reduced survivor
+- [Patch discipline](project_patch_discipline.md) — every MP-SPDZ patch needs a security reason; 0001 currently violates it and needs the lying-party version

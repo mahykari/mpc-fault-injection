@@ -1,5 +1,5 @@
 # Build patched party binaries (mascot, spdz2k, malicious-shamir, ...) from
-# MP-SPDZ v0.4.2 source. Builds inside ubuntu:22.04 because Ubuntu 26.04 host
+# MP-SPDZ v0.4.3 source. Builds inside ubuntu:22.04 because Ubuntu 26.04 host
 # has Boost 1.90, which is incompatible with libOTe's ASIO usage.
 #
 # Driven by containers/build.sh, which extracts the binaries into
@@ -35,11 +35,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /src
 RUN curl -fsSL -o mp-spdz.tar.xz \
-      https://github.com/data61/MP-SPDZ/releases/download/v0.4.2/mp-spdz-0.4.2.tar.xz \
+      https://github.com/data61/MP-SPDZ/releases/download/v0.4.3/mp-spdz-0.4.3.tar.xz \
  && tar -xJf mp-spdz.tar.xz \
  && rm mp-spdz.tar.xz
 
-WORKDIR /src/mp-spdz-0.4.2
+WORKDIR /src/mp-spdz-0.4.3
 
 # Apply our patches in numbered order. The base patch set always applies;
 # the seeded-bug overlay (extra patches) only applies when APPLY_SEEDED_BUG=1.
@@ -94,16 +94,16 @@ FROM builder AS runtime
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Shape an MP-SPDZ root that Config's paths resolve against: Compiler/ is
-# already at /src/mp-spdz-0.4.2; expose every static binary we built where
+# already at /src/mp-spdz-0.4.3; expose every static binary we built where
 # `Config.party_binary_path` (Linux-amd64-patched, use_patched_binary=True)
 # looks for it.
-RUN mkdir -p /src/mp-spdz-0.4.2/bin/Linux-amd64-patched \
- && for b in /src/mp-spdz-0.4.2/static/*-party.x; do \
-      ln -s "$b" "/src/mp-spdz-0.4.2/bin/Linux-amd64-patched/$(basename "$b")"; \
+RUN mkdir -p /src/mp-spdz-0.4.3/bin/Linux-amd64-patched \
+ && for b in /src/mp-spdz-0.4.3/static/*-party.x; do \
+      ln -s "$b" "/src/mp-spdz-0.4.3/bin/Linux-amd64-patched/$(basename "$b")"; \
     done
 
 WORKDIR /app
-RUN ln -s /src/mp-spdz-0.4.2 /app/MP-SPDZ && mkdir -p /app/runs
+RUN ln -s /src/mp-spdz-0.4.3 /app/MP-SPDZ && mkdir -p /app/runs
 
 # python-circil is a sys.path dependency (not pip-installed). Copy the clone
 # from the build context — the deploy already carries it — so the build needs
