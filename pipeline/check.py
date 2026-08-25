@@ -119,15 +119,16 @@ class CircuitChecker(IRWalker):  # type: ignore[misc]
       self.visit(statement)
 
 
-def _walk(circuit: Any) -> CircuitChecker:
+def _checked(circuit: Any) -> CircuitChecker:
+  """Run the checker over `circuit` and hand back what it collected."""
   checker = CircuitChecker()
   checker.visit(circuit)
   return checker
 
 
 def check_circuit(circuit: Any) -> int:
-  return _walk(circuit).calls
+  return _checked(circuit).calls
 
 
 def call_names(circuit: Any) -> Counter[str]:
-  return _walk(circuit).names
+  return _checked(circuit).names

@@ -24,7 +24,7 @@ from circil.ir.node import (  # type: ignore[import-not-found]
   LetExpression,
 )
 
-from pipeline.circil_ir import type_of
+from pipeline.circil_ir import type_of, walk
 
 # Calls whose result costs preprocessed material. Copying one into a
 # mutated twin makes that twin need more offline data than the honest
@@ -35,18 +35,11 @@ from pipeline.circil_ir import type_of
 COSTLY_CALLS = frozenset({"matmul", "*"})
 
 
-def _walk(node: Any) -> list[Any]:
-  found = [node]
-  for index in range(len(node)):
-    found.extend(_walk(node[index]))
-  return found
-
-
 def free_names(node: Any) -> set[str]:
   """Identifier names the node reads, minus the ones it binds itself."""
   names: set[str] = set()
   bound: set[str] = set()
-  for current in _walk(node):
+  for current in walk(node):
     if isinstance(current, LetExpression):
       bound.add(current.var)
     elif isinstance(current, Identifier):
@@ -71,7 +64,7 @@ def donors_of_type(circuit: Any, before: int, wanted: Any) -> list[Any]:
     if _admissible(signal, wanted, scope):
       found.append(signal)
   for statement in circuit.statements[:before]:
-    for node in _walk(statement):
+    for node in walk(statement):
       if _admissible(node, wanted, scope):
         found.append(node)
   return found
@@ -81,7 +74,7 @@ def costs_preprocessing(node: Any) -> bool:
   """True when copying this subtree would add offline work."""
   return any(
     getattr(getattr(current, "function", None), "name", None) in COSTLY_CALLS
-    for current in _walk(node)
+    for current in walk(node)
   )
 
 

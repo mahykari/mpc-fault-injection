@@ -33,6 +33,30 @@ def call(name: str, args: list[Any], result: Any) -> Any:
   )
 
 
+def walk(node: Any) -> list[Any]:
+  """Every node in the subtree, pre-order, `node` first."""
+  return [found for found, _ in walk_paths(node)]
+
+
+def walk_paths(node: Any, prefix: tuple[int, ...] = ()) -> list[tuple[Any, tuple[int, ...]]]:
+  """Every node paired with the child-index path that reaches it.
+
+  Paths, not node references, are what survive `IRNode.copy()`: a copy
+  gets a fresh `node_id`, so identity is useless across circuits.
+  """
+  found = [(node, prefix)]
+  for index in range(len(node)):
+    found.extend(walk_paths(node[index], prefix + (index,)))
+  return found
+
+
+def node_at(root: Any, path: tuple[int, ...]) -> Any:
+  current = root
+  for index in path:
+    current = current[index]
+  return current
+
+
 def is_call(node: Any, name: str) -> bool:
   return isinstance(node, CallExpression) and bool(node.function.name == name)
 

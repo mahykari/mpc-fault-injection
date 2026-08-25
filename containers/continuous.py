@@ -34,7 +34,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from pipeline.protocols import PROTOCOL_SPECS  # noqa: E402  (needs REPO_ROOT on path)
 
-IMAGE = "mpspdz-pipeline:v0.4.2"
+IMAGE = "mpspdz-pipeline:v0.4.3"
 MAX_DEPTH = 40
 
 

@@ -23,7 +23,7 @@ import circil.ir.types as IRType  # type: ignore[import-not-found]
 from circil.ir.node import Assignment, IRNode  # type: ignore[import-not-found]
 from circil.ir.visitor import NodeReplacer  # type: ignore[import-not-found]
 
-from pipeline.circil_ir import call, integer, is_call, is_field, type_of
+from pipeline.circil_ir import call, integer, is_call, is_field, node_at, type_of, walk_paths
 from pipeline.matrix import ADD, MATMUL
 from pipeline.rewrite.donors import pick_donor
 from pipeline.evaluate import diverges
@@ -95,24 +95,6 @@ INJECTIONS: tuple[InjectionRule, ...] = (
 )
 
 
-def _walk(node: Any) -> list[Any]:
-  return [found for found, _ in _walk_paths(node, ())]
-
-
-def _walk_paths(node: Any, prefix: tuple[int, ...]) -> list[tuple[Any, tuple[int, ...]]]:
-  found = [(node, prefix)]
-  for index in range(len(node)):
-    found.extend(_walk_paths(node[index], prefix + (index,)))
-  return found
-
-
-def node_at(root: Any, path: tuple[int, ...]) -> Any:
-  current = root
-  for index in path:
-    current = current[index]
-  return current
-
-
 def _sites(circuit: Any, rule: InjectionRule) -> list[Site]:
   """Match sites, restricted to statements that reach an output.
 
@@ -124,7 +106,7 @@ def _sites(circuit: Any, rule: InjectionRule) -> list[Site]:
   for index, statement in enumerate(circuit.statements):
     if index not in live:
       continue
-    for node, path in _walk_paths(statement, ()):
+    for node, path in walk_paths(statement):
       if path and rule.matches(node):
         found.append(Site(node=node, stmt_index=index, path=path))
   return found

@@ -1,0 +1,7 @@
+{
+  "program_family": "matrix",
+  "injection_layer": "source",
+  "mutation_kind": "inject",
+  "use_patched_binary": true,
+  "timeout_s": 120.0
+}

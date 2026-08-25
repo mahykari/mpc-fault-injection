@@ -396,3 +396,53 @@ from `honest/` clears that one and exposes the buffer-size error above.
 
 The abort is pre-existing and independent of the source-level work: the field
 family on the bytecode injector hits it too, same seed.
+
+## First matrix campaign (2026-08-25)
+
+1000 cases, 4 podman instances, mascot at n=2, matrix family, source-layer
+injection.
+
+```
+caught            963   96.3%
+inert              35    3.5%
+honest_invalid      2    0.2%
+bug                 0
+aborted             0
+```
+
+111 ms mean per case, 149 ms max. Compare the historical field-family baseline
+of 82% caught / 18% inert: the inert class is five times smaller, which is the
+semantic divergence filter doing its job.
+
+### What had to be fixed to get here
+
+- **Constants are plain integers again.** `visit_integer` used to wrap every
+  literal in `sint(...)`, so `a * -1` was secret times secret, consumed a Beaver
+  triple, and made the mutated twin need more preprocessing than the honest one.
+  The two parties then sized their offline phase differently and desynchronised.
+  `Value` now carries whether an expression is already secret and coerces only
+  where a secret is required.
+- **Donors carrying a multiplication are refused.** Copying a subtree containing
+  `matmul` or `*` copies its offline cost too. Same failure, different route.
+- **Injections are checked for divergence before they are kept.**
+  `pipeline/evaluate.py` evaluates a circuit in Python over the same field, and
+  an injection that leaves every output identical is rejected and another
+  candidate tried. Verified against a real mascot run: the evaluator reproduces
+  the revealed values exactly.
+- **The offline cache is shared between twins.** The honest run leaves an OT
+  secrets cache in `honest/`; without copying it across, the mutated twin has one
+  party skipping base-OT setup while its peer performs it, and the honest side
+  reports `Timed out waiting for peer`.
+- **The oracle checked for a catch signature only when the mutated run printed
+  nothing.** A party that revealed some values and then failed its MAC check was
+  classified `bug`. That is the protocol working, reported as a soundness bug.
+  Signature check now runs before the output comparison. This one is not a
+  matrix-branch problem; it is on master.
+
+### Still open
+
+- 35 inert out of 1000. The divergence filter says these mutations change the
+  answer, and MP-SPDZ says they do not. Most likely the compiler optimises the
+  mutated subexpression away, or the compile-time and runtime primes disagree
+  (see the merge list). Undiagnosed and worth a look before trusting the rate.
+- 2 honest_invalid, uninvestigated.
