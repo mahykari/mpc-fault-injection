@@ -26,6 +26,14 @@ from circil.ir.node import (  # type: ignore[import-not-found]
 
 from pipeline.circil_ir import type_of
 
+# Calls whose result costs preprocessed material. Copying one into a
+# mutated twin makes that twin need more offline data than the honest
+# one, and the two parties then size their offline phase differently.
+# `*` is listed because a product of two secrets consumes a triple; a
+# product with a constant does not, but telling them apart here is not
+# worth the precision.
+COSTLY_CALLS = frozenset({"matmul", "*"})
+
 
 def _walk(node: Any) -> list[Any]:
   found = [node]
@@ -69,11 +77,21 @@ def donors_of_type(circuit: Any, before: int, wanted: Any) -> list[Any]:
   return found
 
 
+def costs_preprocessing(node: Any) -> bool:
+  """True when copying this subtree would add offline work."""
+  return any(
+    getattr(getattr(current, "function", None), "name", None) in COSTLY_CALLS
+    for current in _walk(node)
+  )
+
+
 def _admissible(node: Any, wanted: Any, scope: set[str]) -> bool:
   if isinstance(node, (Assignment, LetExpression)):
     return False
   found = type_of(node)
   if found is None or not found.equiv(wanted) or found.is_generic:
+    return False
+  if costs_preprocessing(node):
     return False
   return free_names(node) <= scope
 

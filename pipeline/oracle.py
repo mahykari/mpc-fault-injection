@@ -2,7 +2,7 @@
 
 Returns a `Verdict` whose `category` is the discriminator the loop reads:
 
-  caught          mutated aborted on a malicious-security check
+  caught          a malicious-security check fired, whatever else printed
   inert           mutated output matches honest output
   aborted         mutated aborted due to timeout or crash (exit code -1)
   honest_invalid  honest produced no output; test program unusable
@@ -25,9 +25,17 @@ def judge(result: RunResult, config: NeedsOracle) -> Verdict:
       "honest_invalid", "honest produced no output; test program invalid",
       honest_output, mutated_output,
     )
+  # Before comparing outputs, not only when there are none. A party that
+  # reveals some values and then fails its MAC check has been caught, and
+  # judging it on the partial stdout it managed to print first reports the
+  # protocol working as a soundness bug.
+  if _caught(result.mutated_run, config.spec.catch_signatures):
+    return _verdict(
+      "caught", "malicious-security check caught the mutation",
+      honest_output, mutated_output,
+    )
   if not mutated_output:
-    category, reason = _diagnose_abort(
-      result.mutated_run, config.spec.catch_signatures)
+    category, reason = _diagnose_abort(result.mutated_run)
     return _verdict(category, reason, honest_output, mutated_output)
   if mutated_output == honest_output:
     return _verdict(
@@ -54,12 +62,14 @@ def _joined_stdout(parties: tuple[PartyOutput, ...]) -> str:
   return "".join(p.stdout for p in parties)
 
 
-def _diagnose_abort(
+def _caught(
   parties: tuple[PartyOutput, ...],
   catch_signatures: tuple[str, ...],
-) -> tuple[VerdictCategory, str]:
-  if any(sig in p.stderr for sig in catch_signatures for p in parties):
-    return "caught", "malicious-security check caught the mutation"
+) -> bool:
+  return any(sig in p.stderr for sig in catch_signatures for p in parties)
+
+
+def _diagnose_abort(parties: tuple[PartyOutput, ...]) -> tuple[VerdictCategory, str]:
   if any(p.exit_code == -1 for p in parties):
     return "aborted", "mutated run timed out"
   return "aborted", "mutated run aborted before any output"

@@ -382,3 +382,22 @@ def make_mulsi(dst: Any, src: Any, imm: int) -> Any:
   """Build a `mulsi dst, src, imm` instruction (computes `dst = src * imm`)."""
   from Compiler.instructions import mulsi
   return mulsi(dst, src, imm, add_to_prog=False)
+
+
+def share_offline_cache(source: Path, target: Path) -> None:
+  """Copy MASCOT's cached offline key material from one run dir to another.
+
+  The honest twin runs first and leaves an OT secrets cache behind. Without
+  this the mutated twin has one party reading that cache and skipping base-OT
+  setup while its peer regenerates it interactively, so the two are in
+  different phases and the honest side reports `Timed out waiting for peer`.
+  The cache is per-party material, not shared state; copying it only removes
+  the timing asymmetry.
+  """
+  origin = source / "Player-Data"
+  destination = target / "Player-Data"
+  if not origin.is_dir():
+    return
+  destination.mkdir(parents=True, exist_ok=True)
+  for cached in origin.glob("*-Secrets-*"):
+    shutil.copy(cached, destination / cached.name)

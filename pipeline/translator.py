@@ -16,6 +16,7 @@ already gives that.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable
 
 import pipeline.circil as _circil_path_setup  # noqa: F401
@@ -43,11 +44,29 @@ def _dims(shape: Any) -> tuple[int, int]:
   return shape.rows, shape.cols
 
 
+@dataclass(frozen=True)
+class Value:
+  """A rendered expression, and whether it is already a secret.
+
+  The distinction is load-bearing, not cosmetic. `a * -1` on a secret and
+  a plain int compiles to a local scalar multiply; wrapping the -1 in
+  `sint` makes it secret times secret, which consumes a Beaver triple and
+  changes how much preprocessing the program needs. Twin runs only work
+  while both programs need the same preprocessing.
+  """
+  text: str
+  secret: bool
+
+  def as_secret(self) -> str:
+    return self.text if self.secret else "%s(%s)" % (VALUE_TYPE, self.text)
+
+
 class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
   def __init__(self) -> None:
     self.lines: list[str] = []
-    self._stack: list[str] = []
+    self._stack: list[Value] = []
     self._temps = 0
+    self._let_secrets: dict[str, bool] = {}
 
   # -- emission helpers -------------------------------------------------
 
@@ -55,13 +74,13 @@ class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
     self._temps += 1
     return "_m%d" % self._temps
 
-  def _bind(self, expression: str) -> str:
+  def _bind(self, expression: str) -> Value:
     """Assign `expression` to a fresh temporary and return its name."""
     name = self._fresh()
     self.lines.append("%s = %s" % (name, expression))
-    return name
+    return Value(name, secret=True)
 
-  def _operands(self, node: Any) -> list[str]:
+  def _operands(self, node: Any) -> list[Value]:
     for argument in node.arguments:
       self.visit(argument)
     popped = [self._stack.pop() for _ in node.arguments]
@@ -69,27 +88,27 @@ class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
 
   # -- matrix arms ------------------------------------------------------
 
-  def _emit_fill(self, node: Any, operands: list[str]) -> str:
+  def _emit_fill(self, node: Any, operands: list[Value]) -> Value:
     shape = shape_of(node)
     if shape is None:
       raise NotImplementedError("matrix_fill with no resolved shape")
     rows, cols = _dims(shape)
     name = self._fresh()
     self.lines.append("%s = Matrix(%d, %d, %s)" % (name, rows, cols, VALUE_TYPE))
-    self.lines.append("%s.assign_all(%s)" % (name, operands[0]))
-    return name
+    self.lines.append("%s.assign_all(%s)" % (name, operands[0].as_secret()))
+    return Value(name, secret=True)
 
-  def _emit_add(self, node: Any, operands: list[str]) -> str:
-    return self._bind("%s + %s" % (operands[0], operands[1]))
+  def _emit_add(self, node: Any, operands: list[Value]) -> Value:
+    return self._bind("%s + %s" % (operands[0].text, operands[1].text))
 
-  def _emit_matmul(self, node: Any, operands: list[str]) -> str:
-    return self._bind("%s.dot(%s)" % (operands[0], operands[1]))
+  def _emit_matmul(self, node: Any, operands: list[Value]) -> Value:
+    return self._bind("%s.dot(%s)" % (operands[0].text, operands[1].text))
 
-  def _emit_transpose(self, node: Any, operands: list[str]) -> str:
-    return self._bind("%s.transpose()" % operands[0])
+  def _emit_transpose(self, node: Any, operands: list[Value]) -> Value:
+    return self._bind("%s.transpose()" % operands[0].text)
 
   # Keyed by the CircIL function name so a new op is one table row.
-  _MATRIX_ARMS: dict[str, Callable[[Any, Any, list[str]], str]] = {
+  _MATRIX_ARMS: dict[str, Callable[[Any, Any, list[Value]], Value]] = {
     FILL: _emit_fill,
     ADD: _emit_add,
     MATMUL: _emit_matmul,
@@ -128,15 +147,16 @@ class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
 
   def visit_assignment(self, node: Any) -> None:
     self.visit(node.rhs)
-    self.lines.append("%s = %s" % (node.lhs.name, self._stack.pop()))
+    # Coerced here, not at the literal: a name that is revealed later has
+    # to be secret, but an operand next to a secret does not.
+    self.lines.append("%s = %s" % (node.lhs.name, self._stack.pop().as_secret()))
 
   def visit_integer(self, node: Any) -> None:
-    # A CircIL Integer in field position is a field element. Emitting a
-    # plain Python int would propagate and break `.reveal()` downstream.
-    self._stack.append("%s(%d)" % (VALUE_TYPE, node.value))
+    self._stack.append(Value("%d" % node.value, secret=False))
 
   def visit_identifier(self, node: Any) -> None:
-    self._stack.append(node.name)
+    # A let-bound name is only secret if what it was bound to was.
+    self._stack.append(Value(node.name, self._let_secrets.get(node.name, True)))
 
   def visit_call_expression(self, node: Any) -> None:
     name = node.function.name
@@ -149,11 +169,17 @@ class MpspdzTranslation(EmptyVisitor):  # type: ignore[misc]
     operands = self._operands(node)
     if len(operands) != 2:
       raise NotImplementedError("op %s expects 2 args, got %d" % (name, len(operands)))
-    self._stack.append("(%s %s %s)" % (operands[0], name, operands[1]))
+    left, right = operands
+    self._stack.append(Value(
+      "(%s %s %s)" % (left.text, name, right.text),
+      secret=left.secret or right.secret,
+    ))
 
   def visit_let_expression(self, node: Any) -> None:
     self.visit(node.value)
-    self.lines.append("%s = %s" % (node.var, self._stack.pop()))
+    bound = self._stack.pop()
+    self.lines.append("%s = %s" % (node.var, bound.text))
+    self._let_secrets[node.var] = bound.secret
     self.visit(node.body)
 
 

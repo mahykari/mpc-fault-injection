@@ -26,6 +26,8 @@ from circil.ir.visitor import NodeReplacer  # type: ignore[import-not-found]
 from pipeline.circil_ir import call, integer, is_call, is_field, type_of
 from pipeline.matrix import ADD, MATMUL
 from pipeline.rewrite.donors import pick_donor
+from pipeline.evaluate import diverges
+from pipeline.rewrite.liveness import live_statements
 
 # Field-level sign flip, the port of the `mulsi r, r, -1` gadget. The -1 is
 # the operator, not an injected operand, so it stays a literal.
@@ -34,8 +36,14 @@ SIGN_FLIP = -1
 
 @dataclass(frozen=True)
 class Site:
+  """Where a rule matched, addressed by position rather than identity.
+
+  `IRNode.copy()` hands out a fresh `node_id`, so a node reference does
+  not survive into a copied circuit. A path of child indices does.
+  """
   node: Any
   stmt_index: int
+  path: tuple[int, ...]
 
 
 def _matmul_sites(node: Any) -> bool:
@@ -88,18 +96,37 @@ INJECTIONS: tuple[InjectionRule, ...] = (
 
 
 def _walk(node: Any) -> list[Any]:
-  found = [node]
+  return [found for found, _ in _walk_paths(node, ())]
+
+
+def _walk_paths(node: Any, prefix: tuple[int, ...]) -> list[tuple[Any, tuple[int, ...]]]:
+  found = [(node, prefix)]
   for index in range(len(node)):
-    found.extend(_walk(node[index]))
+    found.extend(_walk_paths(node[index], prefix + (index,)))
   return found
 
 
+def node_at(root: Any, path: tuple[int, ...]) -> Any:
+  current = root
+  for index in path:
+    current = current[index]
+  return current
+
+
 def _sites(circuit: Any, rule: InjectionRule) -> list[Site]:
+  """Match sites, restricted to statements that reach an output.
+
+  Splicing into a dead statement produces a mutation that cannot change
+  the result, which burns a twin run to learn nothing.
+  """
+  live = live_statements(circuit)
   found = []
   for index, statement in enumerate(circuit.statements):
-    for node in _walk(statement):
-      if node is not statement and rule.matches(node):
-        found.append(Site(node=node, stmt_index=index))
+    if index not in live:
+      continue
+    for node, path in _walk_paths(statement, ()):
+      if path and rule.matches(node):
+        found.append(Site(node=node, stmt_index=index, path=path))
   return found
 
 
@@ -109,23 +136,46 @@ class InjectionResult:
   rule_names: tuple[str, ...]
 
 
+def _candidates(circuit: Any, rng: Random) -> list[tuple[InjectionRule, Site]]:
+  """Every (rule, site) pair, shuffled so the search order is seeded."""
+  options = [(rule, site) for rule in INJECTIONS for site in _sites(circuit, rule)]
+  rng.shuffle(options)
+  return options
+
+
+def _apply_one(origin: Any, circuit: Any, rng: Random) -> tuple[Any, str] | None:
+  """One output-changing injection applied to a copy of `circuit`.
+
+  Candidates are tried in seeded order, each on its own copy so a
+  rejected attempt leaves nothing behind. Divergence is measured against
+  `origin`, the unmutated circuit, so a second injection cannot quietly
+  cancel the first.
+  """
+  for rule, site in _candidates(circuit, rng):
+    attempt = circuit.copy()
+    target = node_at(attempt.statements[site.stmt_index], site.path)
+    located = Site(node=target, stmt_index=site.stmt_index, path=site.path)
+    replacement = rule.build(located, attempt, rng)
+    if replacement is None:
+      continue
+    if not NodeReplacer().replace(attempt, target, replacement):
+      continue
+    if diverges(origin, attempt):
+      return attempt, rule.name
+  return None
+
+
 def inject_circuit(circuit: Any, seed: int, amount: int = 1) -> InjectionResult:
-  """Apply up to `amount` injections. Fewer when no rule can fire."""
+  """Apply up to `amount` injections, each one output-changing."""
   rng = Random(seed)
   root = circuit.copy()
   applied: list[str] = []
-  replacer = NodeReplacer()
 
   for _ in range(amount):
-    options = [(rule, site) for rule in INJECTIONS for site in _sites(root, rule)]
-    if not options:
+    outcome = _apply_one(circuit, root, rng)
+    if outcome is None:
       break
-    rule, site = options[rng.randrange(len(options))]
-    replacement = rule.build(site, root, rng)
-    if replacement is None:
-      continue
-    if not replacer.replace(root, site.node, replacement):
-      continue
-    applied.append(rule.name)
+    root, name = outcome
+    applied.append(name)
 
   return InjectionResult(circuit=root, rule_names=tuple(applied))

@@ -7,7 +7,12 @@ from `honest/`. Per-party cwd lists live on `Config`.
 from __future__ import annotations
 
 from pipeline.config import NeedsExecutor
-from pipeline.mpspdz import MpSpdzCompilerToolkit, MpSpdzPartyBinary, SslProvisioner
+from pipeline.mpspdz import (
+  MpSpdzCompilerToolkit,
+  MpSpdzPartyBinary,
+  SslProvisioner,
+  share_offline_cache,
+)
 from pipeline.timing import Timer
 from pipeline.types import MutatedProgram, RunResult
 
@@ -40,6 +45,9 @@ class Executor:
       honest_run = self._party_binary.run_parties(
         self._config.honest_party_cwds,
       )
+      # After the honest twin, before the mutated one: the honest run is
+      # what creates the cache, and the mutated run is what needs it.
+      share_offline_cache(self._config.honest_dir, self._config.mutated_dir)
       mutated_run = self._party_binary.run_parties(
         self._config.mutated_party_cwds,
       )
