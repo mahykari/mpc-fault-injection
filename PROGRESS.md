@@ -19,6 +19,12 @@ needs handled at merge time, not things already done here.
 - **MP-SPDZ moved 0.4.2 to 0.4.3.** `containers/Containerfile`,
   `containers/build.sh` and `patches/mpspdz/README.md` are bumped here. Patch
   0001 applies to 0.4.3 with a 16-line offset. Confirm before the merge lands.
+- **The verdict vocabulary is overloaded and should be renamed.** "bug",
+  "caught", "catch_signatures", "MacCheck Failure" all circle the same few ideas
+  with words that do not distinguish them, and `bug` is both a verdict category
+  and the thing the whole project exists to find. `VerdictCategory` in
+  `pipeline/types.py` is the one place to fix it; the strings flow from there
+  into the reports, the results DB and every summary line.
 - **Two new Config defaults to agree on.** `injection_layer` defaults to
   `"bytecode"` so the field family keeps working; `mutation_kind` defaults to
   `"inject"`. Decide what master should ship.
