@@ -143,4 +143,6 @@ from the repo root on whichever machine is doing the work.
 - `notes/` — reading notes, protocol analysis. Markdown only. (`mp-spdz.md` = MP-SPDZ architecture map; `reading-list.md` = papers triaged by relevance.)
 - `exploration/` — scratch code for poking at MP-SPDZ. Expect ad-hoc scripts, not a library.
 - `MP-SPDZ/` — gitignored binary distribution v0.4.2.
-- `python-circil/` — gitignored clone of the input-program generator.
+- `python-circil/` — gitignored clone of the input-program generator. The
+  commit the code expects is pinned in `scripts/setup-circil.sh`; run that
+  after cloning. The circil API is not stable across commits.

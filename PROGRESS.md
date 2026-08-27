@@ -15,7 +15,10 @@ needs handled at merge time, not things already done here.
   does not run against it unmodified: `FuzzerConfig.enable_fixed_size_array` is
   now `enable_array`, `array_types_for_fixed_size_array` is
   `array_element_types`, and `Custom.constructor()` is a `@staticmethod`
-  returning a templated spec rather than an instance method.
+  returning a templated spec rather than an instance method. The version is now
+  pinned: `scripts/setup-circil.sh` carries the remote and commit and checks it
+  out, so a fresh clone gets the circil this code was written against. Master's
+  own code still needs the renames applied when it merges.
 - **MP-SPDZ moved 0.4.2 to 0.4.3.** `containers/Containerfile`,
   `containers/build.sh` and `patches/mpspdz/README.md` are bumped here. Patch
   0001 applies to 0.4.3 with a 16-line offset. Confirm before the merge lands.
