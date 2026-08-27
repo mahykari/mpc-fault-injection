@@ -447,8 +447,35 @@ semantic divergence filter doing its job.
 
 ### Still open
 
-- 35 inert out of 1000. The divergence filter says these mutations change the
-  answer, and MP-SPDZ says they do not. Most likely the compiler optimises the
-  mutated subexpression away, or the compile-time and runtime primes disagree
-  (see the merge list). Undiagnosed and worth a look before trusting the rate.
-- 2 honest_invalid, uninvestigated.
+### Open: the 35 inert cases
+
+**The claim to check:** `pipeline/evaluate.py` says the tampered program prints
+something different from the untampered one. MP-SPDZ, running the same pair,
+prints the same thing for 35 of 1000 cases. One of the two is wrong.
+
+**What `evaluate.py` is, exactly.** A plain single-process interpreter for the
+CircIL tree. No parties, no shares, no MP-SPDZ, no networking. It binds input
+*i* to the literal `i + 1`, the same values `pipeline/translator.py` bakes into
+the emitted program, walks the statements in order, and computes with Python
+integers modulo `PRIME_MERSENNE_M127`. `matmul`, `add`, `transpose` and
+`matrix_fill` are implemented directly; field ops are `+ - *`. It returns a
+dict of output name to value, and `diverges()` compares two of those dicts. It
+is the cleartext reference meaning of the program and nothing more.
+
+**Where that can be wrong.** It never models two things that sit between the
+circuit and the printed numbers:
+
+1. MP-SPDZ's compiler optimises. If it removes the tampered subexpression as
+   dead or folds it, the program that actually executes is not the program the
+   interpreter evaluated.
+2. The field. The interpreter uses M127. The compiled program is built for
+   MP-SPDZ's default prime, because `Prime.compile_args` is empty while
+   `runtime_args` passes `-P`. See the merge list.
+
+**How to check, cheaply.** Take an inert case's seed, translate both twins, and
+diff the two compiled programs. If they are identical, the compiler folded the
+tampering away and suspect 1 is confirmed. If they differ, run the interpreter
+under MP-SPDZ's default prime instead of M127 and see whether the divergence
+survives, which tests suspect 2.
+
+- 2 honest_invalid, also uninvestigated.
