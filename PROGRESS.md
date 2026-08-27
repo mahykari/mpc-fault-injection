@@ -19,6 +19,17 @@ needs handled at merge time, not things already done here.
 - **MP-SPDZ moved 0.4.2 to 0.4.3.** `containers/Containerfile`,
   `containers/build.sh` and `patches/mpspdz/README.md` are bumped here. Patch
   0001 applies to 0.4.3 with a 16-line offset. Confirm before the merge lands.
+- **Every matrix in every generated program is a constant matrix.** Inputs are
+  baked as `sint(index + 1)` (`pipeline/translator.py`, on master since the
+  original translator), and a matrix input is that one literal spread over every
+  entry via `assign_all`. `matrix_fill` does the same. So `in0` is all 1s, `in1`
+  is all 2s, and no matrix in the corpus ever has two different entries. This is
+  not circil's doing: circil produces the program's structure, the input *values*
+  are ours to choose. Consequences: transpose is a no-op on any square input,
+  operand order never matters, and a wrong result can easily coincide with the
+  right one. The value space a fuzzer is exploring here is roughly nothing. Fix
+  is to bake per-entry values derived from the seed, or read real input files.
+  Suspect this is also behind some of the 35 inert cases.
 - **The verdict vocabulary is overloaded and should be renamed.** "bug",
   "caught", "catch_signatures", "MacCheck Failure" all circle the same few ideas
   with words that do not distinguish them, and `bug` is both a verdict category
