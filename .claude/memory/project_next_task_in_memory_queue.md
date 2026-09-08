@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 626366ae-a574-406d-a593-42501340594b
-  modified: 2026-08-04T16:25:14.677Z
+  modified: 2026-09-07T13:02:16.021Z
 ---
 
 **Problem.** The dispatcher sits pinned at ~100% CPU during a campaign. Two
@@ -37,3 +37,7 @@ process, regenerable queue, durability already in sqlite. See
 
 Campaign was left running on mercury overnight; this throttles visibility
 (`/status` starves), not results.
+
+Still unimplemented as of 2026-09-07: `store.py` has no deque/heap and still
+carries `_sweep_if_due`/`_abandon_exhausted`. PR #6 (dispatcher-pull-model →
+master) was opened without it; fixes deferred to later per Mahyar.

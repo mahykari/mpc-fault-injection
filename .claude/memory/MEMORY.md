@@ -49,3 +49,4 @@
 - [Session state 2026-08-10](project_session_state_2026_08_10.md) — 2M campaign running clean after the PID fix; smoke was 1008/1008 with zero honest_invalid
 - [Campaign launch gotchas](project_campaign_launch_gotchas.md) — `--runs` is per grid point, not total; a new campaign reattaches to the old campaign.db unless you archive it
 - [Settings reload split](reference_settings_reload.md) — allow/deny apply live mid-session, defaultMode only at session start
+- [circil submodule + Matrix template](project_circil_submodule_matrix_template.md) — value-parameterized Matrix needs a circil patch; submodule first
