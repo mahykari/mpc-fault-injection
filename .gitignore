@@ -32,6 +32,7 @@ runs/
 .claude/scheduled_tasks.lock
 .claude/worktrees/
 .claude/contractor
+.claude/.turn-start
 .claude/guess.md
 .claude/memory/*.bak/
 
