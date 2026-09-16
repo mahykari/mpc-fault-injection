@@ -16,7 +16,7 @@ metadata:
 - Main checkout `/home/mkarimi/mpc-fault-injection` switched to `master`.
 
 **Plan, in order (Mahyar's, 2026-09-16).**
-1. CLAUDE.md branch: loosen the terseness rules that produce tangled code, add
+1. DONE 2026-09-16 (branch `claude-md`, pending merge). CLAUDE.md branch: loosen the terseness rules that produce tangled code, add
    the design rules the review established. See [[feedback_bel_canto_for_design]].
    Also drop teaching mode and the contractor machinery ("I'm mostly in
    contractor mode"): the CLAUDE.md "Teaching mode" section,

@@ -5,7 +5,6 @@
 - [Terse, no commentary](feedback_terse_no_commentary.md) — change-and-why bullets, skip framing/alignment-praise/recap
 - [Don't verify standing invariants](feedback_dont_verify_invariants.md) — on review, don't run mypy/main.py to confirm they pass; user knows they do
 - [Yap less, fixed vocabulary](feedback_yap_less.md) — drastically shorter answers; reuse the user's own terms verbatim, no paraphrasing for variety
-- [Don't escalate small asks](feedback_dont_escalate_small_asks.md) — do the literal small request; don't turn it into a design-decision menu
 - [Stay high-level](feedback_stay_high_level.md) — act like a fuzzer user, not an MPC theorist; inert mutations are noise to filter, not subtleties to investigate
 - [Push back, peer tone](feedback_push_back.md) — OK to say "look, ..." or "I don't follow"; don't softly mirror unclear/contradictory framing
 - [Fuzzer, not verifier](feedback_testing_not_verifying.md) — sample, don't enumerate; combinatorial blowup is the workload
@@ -14,7 +13,7 @@
 - [Code structure rules](feedback_code_structure.md) — master Config + typing.Protocol views; no f-strings at call sites; derived values as @property; no long arg lists
 - [Code terseness mirrors comms](feedback_code_terseness.md) — no inline magic strings or chunky if/elif dispatch; classify at the source layer as a typed field, not re-derived at call sites
 - [Describe by general capability](feedback_describe_change_generally.md) — commit/doc scope must match what the change does, not just the smoke-test example
-- [Isolate adapter-layer pokes](feedback_isolate_adapter_pokes.md) — low-level MP-SPDZ accesses belong in helpers, not in business logic; the helpers can stay ugly, the call sites must read cleanly
+- [Isolate adapter-layer pokes](feedback_isolate_adapter_pokes.md) — low-level MP-SPDZ accesses belong in helpers, not in business logic; helpers isolate MP-SPDZ's ugliness but stay informative; call sites read cleanly
 - [Terse commit messages](feedback_terse_commits.md) — one-line title, optional ≤5-line why; no multi-section bodies, no "implementation note" subsections
 - [Next: python-circil integration](project_next_task_circil_integration.md) — first task for 2026-05-13; replace Generator + Translator stubs
 - [Patched mascot-party.x + first gadget](project_patched_binary_done.md) — patched binary, GadgetTemplate dispatcher, SingleVariableBump gadget all in; MAC check observed
@@ -22,7 +21,6 @@
 - [MP-SPDZ Compiler quirks](project_compiler_quirks.md) — singleton, module-level program globals, CWD-bound output, deepcopy-resistant — what pipeline/mpspdz.py works around
 - [MP-SPDZ jump model](project_mpspdz_jump_model.md) — all jumps over public state; every party traverses identical paths; static sync sequence == dynamic sync sequence
 - [Use library walker for tree IRs](feedback_walker_for_tree_traversal.md) — subclass EmptyVisitor/IRWalker, don't flatten to isinstance recursion
-- [Delegation scope](feedback_delegation_scope.md) — "give me something to do" = small wire-connecting piece, not the substantive feature; don't offload meaty work
 - [Suggest, don't write](feedback_suggest_dont_write.md) — default mode is point-and-propose; user implements. Hands off until explicitly asked to write
 - [User drives the button](feedback_user_drives_button.md) — prep + hand off launches/pushes/deploys; user runs them, don't run or re-offer
 - [Emoticons and kaomoji OK](feedback_emoticons_ok.md) — chat replies welcome `:)` and `¯\_(ツ)_/¯`; code/commits stay clean

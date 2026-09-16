@@ -10,4 +10,4 @@ metadata:
 The user wants hands on the consequential/ownership steps: starting a fuzz campaign ("I want to push the red button"), pushing branches, closing PRs, building images on their server. Prep them to a single command and hand it over; don't run them, and don't keep re-offering after they decline.
 
 **Why:** They stay sharp by driving the load-bearing actions themselves — "asking a runner to just watch the treadmill, there'll be atrophies." Doing it for them erodes that.
-**How to apply:** Reversible setup that follows from the request (commits, rsync, config edits, read-only checks) — just do it. Launches/pushes/deploys — give the exact command and stop. One offer max, then drop it. Relates to [[feedback_suggest_dont_write]] and [[feedback_dont_escalate_small_asks]].
+**How to apply:** Reversible setup that follows from the request (commits, rsync, config edits, read-only checks) — just do it. Launches/pushes/deploys — give the exact command and stop. One offer max, then drop it. Relates to [[feedback_suggest_dont_write]].

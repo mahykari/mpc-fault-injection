@@ -17,4 +17,3 @@ metadata:
 
 **Open finding — server underloaded.** `launch.py` spawns 16 containers/round and **waits for all 16** (round barrier). Runs inside a container are sequential; party procs are network-bound (latency, not CPU). n=9 instances are ~10-30× slower than n=3, so fast ones finish + exit and the box idles on the n=9 tail (saw only 3 containers up on a 192-thread box). **Next levers (pending user pick):** (1) bump `--instances` 16→48+ (work is network-bound, oversubscribe freely); (2) bigger win — drop the round barrier so instances run continuously instead of waiting for the slowest each round.
 
-**Note:** CLAUDE.md gained a "Teaching mode" section 2026-07-09 (Socratic: walk setup, ask user's approach before revealing any solution, phase-separate explore/edit, batched edits with diff summary, strict one-purpose bash). Follow it.

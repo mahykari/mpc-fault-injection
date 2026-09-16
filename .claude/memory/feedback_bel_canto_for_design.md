@@ -25,8 +25,8 @@ wire-connecting pieces", "helpers can stay ugly".
 **How to apply:** in design discussions and the refactor, explain structure in
 full sentences with the reasoning attached; diagrams welcome ("I have a big
 enough screen"). Never fix a package or import problem at the image or
-sys.path layer; fix the package. CLAUDE.md is being rewritten on branch
-`claude-md` to say this; until it lands, treat the 200-word cap as a chat
-rule, not a design-discussion rule. Supersedes the strictest reading of
-[[feedback_yap_less]] and [[feedback_dont_escalate_small_asks]] for design
-work.
+sys.path layer; fix the package. CLAUDE.md § "Design work" says this since
+2026-09-16 (branch `claude-md`); the soup rules ("don't escalate small asks",
+"small wire-connecting pieces", "helpers can stay ugly") were deleted the
+same day. Supersedes the strictest reading of [[feedback_yap_less]] for
+design work.

@@ -5,45 +5,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Response style
 
-- 200 words max per response. Hard cap.
-- Lead with the point. No wind-up, no padding, no summary of what
-  you just did if the diff already shows it.
-- No filler openers ("Great", "Sure", "Got it"). Start with substance.
-- No dashes of any kind (em or en). Hyphenated words are fine.
-  Use periods and semicolons instead.
-- No reassuring or resolving endings. If something is broken or
-  unresolved, say so and stop.
-- Be direct and opinionated. Push back when my approach is worse.
-  Plain words over jargon.
+- Regular responses (answers to a question, explanations, small requests, etc.) get 500 words max per response.
+  Design or implementation tasks have no word limit.
+- Lead with the point instead of a wind-up or a summary.
+- Avoid using filler openers ("Great", "Sure", "Got it") and start with substance.
+- Avoid using dashes of any kind (em or en). Hyphenated words are fine.
+  Use periods, semicolons, and other equivalent punctuation instead.
+- If my approach is bad or wrong, and you have a reason for believing so, push back and don't concede.
+- Plain words over jargon.
 - Short questions get short answers.
 
 
-## Teaching mode
+## Working process
 
-When I bring a problem:
-
-1. Walk the setup: constraints, what's known, why the naive approach fails.
-2. Stop before any solution. Ask me how I'd solve it.
-3. Never write code or reveal the approach until I've committed to an attempt in writing.
-4. Critique my attempt against the constraints. Wrong answers get a pointed question, not the fix.
-5. Hints come in stages, smallest first, only when I ask.
-6. Phase separation. Do ALL exploration (grep, read, search) first,
+1. Phase separation. Do ALL exploration (grep, read, search) first,
    silently. Then present findings and the proposed change set as one
    plan. No edits during exploration, no exploration after edits begin.
-7. Batched edits. Apply file changes as one grouped batch per approved
+2. Batched edits. Apply file changes as one grouped batch per approved
    plan, ordered by file. Announce the batch as a short diff summary
    before applying. Never interleave a search between two edits.
-8. If new information mid-batch invalidates the plan, STOP, say what
+3. If new information mid-batch invalidates the plan, STOP, say what
    broke, and re-plan. Don't silently patch around it.
-9. Bash discipline. One command, one purpose. No inline multi-line
-   bash, no && chains longer than two, no piped awk/sed monsters.
+4. Bash discipline. One command, one purpose.
+   Avoid inline multi-line bash, && chains longer than two, and piped awk/sed monsters.
    Anything bigger goes in a named script under scripts/, shown to me
    before it runs. State the purpose of every command in one line.
 
 
+## Design work
+
+Design discussions and refactors have no word budget. Spell the rationale out
+in full sentences; diagrams welcome.
+
+- A name must evoke the thing to a stranger. Write the one sentence a class or
+  module should evoke, then check the name alone lands on it. Generic nouns
+  (Site, Run, Cell, Config, Serve) fail.
+- "What is X?" in a review means discard X, not explain X.
+- No cheap tricks to get code running: blanking a package `__init__` inside an
+  image, `sys.path.insert` to import siblings, passing `argparse.Namespace`
+  around. Fix the package, not the import.
+- Accretion gets restructured, not patched locally.
+- Helpers that isolate MP-SPDZ internals still read as code, not witchcraft.
+
+
 ## Librarian mode
 
-When making claims about what a paper, protocol, tool, or system says, promises, or defines, emit the CLAIM format below. The Stop hook at `.claude/hooks/librarian.sh` enforces the format when it is present in a response.
+When making claims about what a paper, protocol, tool, or system says, promises, or defines,
+emit the CLAIM format below.
+The Stop hook at `.claude/hooks/librarian.sh` enforces the format when it is present in a response.
 
 ### Format
 
@@ -66,49 +75,18 @@ The hook fires only on responses that contain `--- CLAIM ---`. Responses that do
 
 ### What to do when a source cannot be fetched
 
-Do NOT wrap the claim in a CLAIM block. State it in prose and mark it `(unverified)` so the reader knows it's from memory, not source. Prefer to fetch first; mark unverified only when a fetch is not possible.
+Do NOT wrap the claim in a CLAIM block. State it in prose and mark it clearly (e.g., `(unverified)`) so the reader knows it's from memory, not source. Prefer to fetch first; mark unverified only when a fetch is not possible.
 
 
 ## What this project is
 
-Research repo exploring **fault injection for malicious-secure MPC protocols**. The MPC analogue of ARGUZZ (which fault-injects zkVM provers). Motivation and framing live in `README.md`; do not restate them, build on them.
+Fault injection for malicious-secure MPC protocols; the MPC analogue of Arguzz. Where things live:
 
-The project has a **scaffold-with-stubs**. `BLUEPRINT.md` is the design source of truth. `pyproject.toml` configures uv + `mypy --strict`. `pipeline/` holds the typed pipeline components (Generator, Translator, Compiler, Injector, Executor, Oracle, Reporter) — all stubs at scaffold time, replaced one at a time. `main.py` runs the pipeline end-to-end. The invariants — `uv run python main.py` always works, `uv run mypy` always green — are load-bearing; see `BLUEPRINT.md` § "Development invariants".
+- `README.md`: motivation, framing, targets table. Build on it, don't restate it.
+- `BLUEPRINT.md`: design source of truth. Substrate, scope, threat model, components, repo layout, MP-SPDZ distribution and re-fetch.
+- `notes/mp-spdz.md`: MP-SPDZ architecture map, injection seam, anchor files, grep recipes. Start there before your own codebase sweep.
 
-## Primary target: MP-SPDZ
-
-MP-SPDZ (https://github.com/data61/MP-SPDZ) is the main SUT. It lives at `./MP-SPDZ/`, gitignored (see `.gitignore`). What's in there is the **pre-built binary distribution** (v0.4.2 tarball from GitHub Releases), *not* a source clone — building from source on Ubuntu 26.04 fails on a Boost 1.90 / `libOTe` ASIO incompatibility. The binaries are statically linked and live under `MP-SPDZ/bin/Linux-amd64/` (`mascot-party.x`, `semi-party.x`, `spdz2k-party.x`, ...). The `Compiler/` Python module is also present — that's what we import for IR-level fault injection.
-
-Re-fetch (from repo root):
-```bash
-curl -L -o /tmp/mp-spdz.tar.xz https://github.com/data61/MP-SPDZ/releases/download/v0.4.2/mp-spdz-0.4.2.tar.xz
-tar -xJf /tmp/mp-spdz.tar.xz && mv mp-spdz-0.4.2 MP-SPDZ
-```
-
-`notes/mp-spdz.md` has the architecture map (with the EXEC↔PROTO injection seam called out), the canonical anchor files, and ready-to-run `grep` recipes for MAC checks, opening, sacrificing, and truncation. **Start there** before doing your own codebase sweep — the user has already thought through what matters.
-
-## The mental model driving every task
-
-The attack surface is the **delta between semi-honest and malicious protocols** in MP-SPDZ. Per the project README, Semi/Semi2k = MASCOT/SPDZ2k with these stripped out: amplifying, sacrificing, MAC generation, OT correlation checks. That stripped set IS the fault-injection target — anywhere malicious-only code runs, ask "what if a corrupt party skips, corrupts, or races this step?"
-
-Methodology is the MPC port of **Arguzz** (arXiv 2509.10819): mutate the program at the compiler-IR layer on the corrupt parties; check whether the protocol's malicious-security mechanisms detect the deviation. Oracles:
-- **Soundness bug** = deviation produces wrong output silently (no abort). This is what we hunt.
-- **Completeness** = honest run succeeds. Already covered by BabelFuzz; not our focus.
-- **Fairness** = all-or-nothing output delivery.
-
-Ground truth for real bugs: "Rushing at SPDZ" (ePrint 2025/789) — missing MAC checks (notably in truncation), thread races around opening. Useful as a reference for what historical bugs *look like*; the current gadget injector won't directly reproduce them (those are skip-CHECK-class, not gadget-class), but they motivate the harness.
-
-## Design decisions
-
-`BLUEPRINT.md` is the source of truth. Summary so future-you doesn't reopen settled questions:
-
-- **Injection layer = MP-SPDZ compiler IR** (`Compiler.program.Program`), not raw bytecode and not source strings. Mutate the IR after compile, before execution. One mutated IR per run.
-- **Scope = gadget insertion only.** Splice a local-only block of arithmetic between two consecutive sync points on each corrupt party's tape. Operators that touch MAC tags or skip/move CHECKs are out of scope here; they need a different substrate.
-- **Oracle = twin-run.** Baseline (all honest) vs mutated, diff outputs. `mac_fail` / `consistency_check_fail` = caught; silent divergence = soundness bug; crash / timeout = inconclusive.
-- **Synchronisation invariant** is preserved by the gadget whitelist: gadget bodies use only local-only opcodes (no `Player::` calls), so honest parties see no extra network traffic.
-- **Threat model = within-threshold corrupt-set sampling.** For each `(protocol, n)`, the harness samples non-empty `S ⊆ {0..n-1}` with `|S| ≤ t`. Combinatorial growth in `|S|` is the workload of a fuzzer, not a constraint to design around.
-- **Same mutation across corrupt parties** for now — every party in `S` loads the same mutated `.bc`. Per-party variation and coordinated collusion are future work.
-- **First concrete target = plumbing milestone.** Compile a hand-written program; run `mascot-party.x × 2` from Python (`n=2`, `t=1`, `S={1}`); capture stdout. No injection yet — confirm we can drive MP-SPDZ end-to-end.
+Invariants: `uv run python main.py` always works, `uv run mypy` always green. See `BLUEPRINT.md` § "Development invariants".
 
 ## Subagents
 
@@ -132,15 +110,3 @@ from the repo root on whichever machine is doing the work.
 
 - `notes/reading-list.md` explicitly marks papers as "read now", "read if needed", and "don't read". Respect this — don't push the user toward papers flagged as not-our-problem (FHE internals, ZK).
 - Notes use terse, opinionated markdown with WHY/WHEN framing. Match that style when editing them; don't bloat with generic summaries.
-- Protocol families to know by name: SPDZ/MASCOT (dishonest-majority, MAC-based), Malicious Shamir (honest-majority, RS-based reconstruction), BMR. The targets table in `README.md` lists other frameworks (EMP, EzPC, Silph, ABY3, MOTION, CrypTen) as secondary — MP-SPDZ is where effort goes first.
-
-## Directory intent
-
-- `BLUEPRINT.md` — design source of truth (architecture, components, threat model, working-dir layout).
-- `pipeline/` — typed pipeline components (Generator, Translator, Compiler, Injector, Executor, Oracle, Reporter). Stubs replaced one at a time; `mypy --strict` enforced.
-- `main.py` — pipeline entrypoint. `uv run python main.py` must always work.
-- `runs/<id>/` — per-run artifacts (honest + mutated `.bc`, per-party stdout/stderr, `injection.json`, `report.json`). Gitignored.
-- `notes/` — reading notes, protocol analysis. Markdown only. (`mp-spdz.md` = MP-SPDZ architecture map; `reading-list.md` = papers triaged by relevance.)
-- `exploration/` — scratch code for poking at MP-SPDZ. Expect ad-hoc scripts, not a library.
-- `MP-SPDZ/` — gitignored binary distribution v0.4.2.
-- `python-circil/` — gitignored clone of the input-program generator.

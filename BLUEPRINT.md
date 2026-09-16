@@ -7,6 +7,14 @@ in-memory program IR, take a copy and insert a local-only gadget on
 the corrupt party, materialize both copies to disk, launch the
 parties, twin-run, classify the outputs.
 
+Methodology is the MPC port of **Arguzz** (arXiv 2509.10819): mutate
+the program at the compiler-IR layer on the corrupt parties; check
+whether the protocol's malicious-security mechanisms detect the
+deviation. Oracles: **soundness** (deviation produces wrong output
+silently; what we hunt), **completeness** (honest run succeeds;
+BabelFuzz's job, not ours), **fairness** (all-or-nothing output
+delivery).
+
 ```mermaid
 flowchart TD
     Seed --> Gen[Generator]
@@ -74,6 +82,28 @@ information-theoretic MACs. It's the canonical "SPDZ" in MP-SPDZ.
 `spdz2k-party.x` (same online phase over Z_{2^k}) is the natural
 follow-up. LowGear / HighGear use FHE-based offline (extra setup),
 deferred.
+
+## MP-SPDZ distribution
+
+MP-SPDZ (https://github.com/data61/MP-SPDZ) lives at `./MP-SPDZ/`,
+gitignored. What's in there is the **pre-built binary distribution**
+(v0.4.2 tarball from GitHub Releases), *not* a source clone —
+building from source on Ubuntu 26.04 fails on a Boost 1.90 / `libOTe`
+ASIO incompatibility. The binaries are statically linked and live
+under `MP-SPDZ/bin/Linux-amd64/` (`mascot-party.x`, `semi-party.x`,
+`spdz2k-party.x`, ...). The `Compiler/` Python module is also present
+— that's what we import for IR-level fault injection.
+
+Re-fetch (from repo root):
+```bash
+curl -L -o /tmp/mp-spdz.tar.xz https://github.com/data61/MP-SPDZ/releases/download/v0.4.2/mp-spdz-0.4.2.tar.xz
+tar -xJf /tmp/mp-spdz.tar.xz && mv mp-spdz-0.4.2 MP-SPDZ
+```
+
+`notes/mp-spdz.md` has the architecture map (with the EXEC↔PROTO
+injection seam called out), the canonical anchor files, and
+ready-to-run `grep` recipes for MAC checks, opening, sacrificing, and
+truncation.
 
 ## Threat model: within-threshold corrupt-set sampling
 
@@ -212,6 +242,21 @@ runs/<id>/
 
 In-tree (not `/tmp`, not `~/.cache`) because runs are cheap to keep
 and easier to inspect when debugging.
+
+Repository layout:
+- `pipeline/` — typed pipeline components (Generator, Translator,
+  Compiler, Injector, Executor, Oracle, Reporter). `mypy --strict`
+  enforced.
+- `main.py` — pipeline entrypoint. `uv run python main.py` must always
+  work.
+- `runs/<id>/` — per-run artifacts as above. Gitignored.
+- `notes/` — reading notes, protocol analysis. Markdown only.
+  (`mp-spdz.md` = MP-SPDZ architecture map; `reading-list.md` = papers
+  triaged by relevance.)
+- `exploration/` — scratch code for poking at MP-SPDZ. Ad-hoc scripts,
+  not a library.
+- `MP-SPDZ/` — gitignored binary distribution v0.4.2 (see above).
+- `python-circil/` — gitignored clone of the input-program generator.
 
 ## Development invariants
 

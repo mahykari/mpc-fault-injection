@@ -7,7 +7,7 @@ metadata:
   originSessionId: 636bf176-9417-477c-acc6-97c76330ccfc
 ---
 
-Cut response length hard. **Hard cap: 200 words per response** (user's explicit rule 2026-07-07 — "ain't no shit you can't say in 200 words"). No headers, no bold scaffolding, no "shipped / next / limitations" tri-section unless asked. Status questions get a few bullets max.
+Cut response length hard. Word budget lives in CLAUDE.md § "Response style" (500 words for regular answers, none for design or implementation tasks). No headers, no bold scaffolding, no "shipped / next / limitations" tri-section unless asked. Status questions get a few bullets max.
 
 Keep vocabulary stable across a session: if a concept was called X once, keep calling it X. Do not paraphrase for variety ("dead anchor" → "inert mutation" → "no-op bump" is exactly the kind of churn to avoid).
 

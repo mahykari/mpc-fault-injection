@@ -31,9 +31,7 @@ runs/
 # hooks, scripts, settings, and memory/ are in git; these are local-only.
 .claude/scheduled_tasks.lock
 .claude/worktrees/
-.claude/contractor
 .claude/.turn-start
-.claude/guess.md
 .claude/memory/*.bak/
 
 # Local-only Claude Code notes and per-task briefings (copied into each
