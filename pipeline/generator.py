@@ -8,7 +8,6 @@ small and downstream MP-SPDZ compilation is predictable.
 from __future__ import annotations
 
 import pipeline.circil as _circil_path_setup  # noqa: F401
-from random import Random
 
 import circil.ir.types as IRType  # type: ignore[import-not-found]
 from circil.fuzzer.builtin_operators import Builtins  # type: ignore[import-not-found]
@@ -44,8 +43,8 @@ def _fuzzer_config(config: NeedsGenerator) -> FuzzerConfig:
 
 
 def generate_program(config: NeedsGenerator) -> CircilProgram:
-  rng = Random(config.seed.value)
-  circuit = SimpleCircuitFuzzer(FIELD_MODULO, rng, _fuzzer_config(config)).run()
+  circuit = SimpleCircuitFuzzer(
+    FIELD_MODULO, config.program_rng, _fuzzer_config(config)).run()
   print(
     f"[generator] CircIL circuit (seed={config.seed.value}, "
     f"inputs={len(circuit.inputs)}, "

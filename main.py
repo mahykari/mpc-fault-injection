@@ -5,32 +5,23 @@ Subcommands:
   aggregate    Roll up runs/*/report.json into runs/results.db
   rerun-inert  Re-run inert cases under semi-honest to classify them
 
-`uv run python main.py` runs (BLUEPRINT invariant). With no env it runs
-seeds 0..N_RUNS-1 as instance 0 with DEFAULTS. The `CONFIG` env points at a
-JSON run spec (written per-instance by the launcher) carrying everything:
-  seeds        list of seeds this run executes      (default range(N_RUNS))
-  instance_id  namespaces run artifacts             (default 0, env INSTANCE_ID)
-  dispatcher   base URL to pull work from           (default none, env DISPATCHER)
-  <other keys> Config-field overrides onto DEFAULTS (e.g. expression_depth)
-
-With `dispatcher` set, seeds are ignored: the process becomes a worker that
-pulls one experiment at a time and exits when the campaign drains. Containers
-take that route and get both keys from the environment, no spec file.
+`uv run python main.py` runs (BLUEPRINT invariant): seeds 0..N_RUNS-1 as
+instance 0 with DEFAULTS. With `DISPATCHER` set in the environment the process
+is a worker instead: it pulls one experiment at a time from that URL and exits
+when the campaign drains. `INSTANCE_ID` namespaces its run dirs. The launcher
+sets both; nothing else is read from the environment.
 """
 from __future__ import annotations
 
 import argparse
 import dataclasses
 import json
-import os
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any
 
-from pipeline import Config
-from pipeline.instance import run_dispatcher_instance, run_instance
-from pipeline.config import apply_overrides
+from pipeline.config import Config
+from pipeline.instance import Worker, run_dispatcher_instance, run_instance
 from pipeline.mpspdz import MpSpdzPartyBinary
 from pipeline.types import Seed
 
@@ -72,27 +63,12 @@ CREATE INDEX IF NOT EXISTS idx_combo_verdict ON runs(combo, verdict);
 ID_PATTERN = re.compile(r"i(\d+)-case-(\d+)")
 
 
-def _spec() -> dict[str, Any]:
-  path = os.environ.get("CONFIG")
-  return json.loads(Path(path).read_text()) if path else {}
-
-
-def _from_spec_or_env(spec: dict[str, Any], key: str, env: str) -> str | None:
-  """Workers carry no spec file, so the launcher passes these as env."""
-  value = spec.pop(key, None)
-  return str(value) if value is not None else os.environ.get(env)
-
-
 def cmd_run(_args: argparse.Namespace) -> None:
-  spec = _spec()
-  seeds = spec.pop("seeds", list(range(N_RUNS)))
-  instance_id = int(_from_spec_or_env(spec, "instance_id", "INSTANCE_ID") or 0)
-  dispatcher = _from_spec_or_env(spec, "dispatcher", "DISPATCHER")
-  config = apply_overrides(DEFAULTS, spec)
-  if dispatcher:
-    run_dispatcher_instance(config, dispatcher, instance_id)
+  worker = Worker.from_env()
+  if worker.dispatcher:
+    run_dispatcher_instance(DEFAULTS, worker.dispatcher, worker.instance_id)
   else:
-    run_instance(config, seeds, instance_id)
+    run_instance(DEFAULTS, range(N_RUNS), worker.instance_id)
 
 
 def cmd_aggregate(args: argparse.Namespace) -> None:

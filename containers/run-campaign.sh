@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Campaign entrypoint. Run it from the repo root on whichever machine is doing
 # the work. Archives any prior campaign.db (so a new campaign doesn't mix with an
-# earlier experiment), rebuilds both images, then runs the continuous
-# multi-protocol campaign. Uses system python3 for orchestration; the heavy work
-# is inside the podman image.
+# earlier experiment), rebuilds both images, then launches the campaign. Uses
+# system python3 for orchestration; the heavy work is inside the podman image.
 #
 # It runs in the foreground; detaching is the caller's business. Under tmux, or:
-#   setsid bash containers/run-campaign.sh N > runs/continuous.log 2>&1 &
+#   setsid bash containers/run-campaign.sh N > runs/campaign.log 2>&1 &
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,5 +34,5 @@ echo "==> building pipeline image"
 echo "==> building dispatcher image"
 ./containers/build.sh dispatch
 
-echo "==> launching continuous campaign (runs per grid point=$RUNS)"
-python3 containers/continuous.py --memory 4g --runs "$RUNS"
+echo "==> launching campaign (runs per grid point=$RUNS)"
+python3 containers/launch.py --memory 4g --runs "$RUNS"

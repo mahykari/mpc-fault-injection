@@ -1,13 +1,11 @@
-"""Run one instance: pipeline cases, summarised.
+"""Run one worker: pipeline cases, summarised.
 
 Two loops share the per-case body:
 
-  run_instance             walks a fixed seed slice. The pre-dispatcher model,
-                           still what `uv run python main.py` does with no env.
+  run_instance             walks a fixed seed slice; what `uv run python main.py`
+                           does with no env.
   run_dispatcher_instance  pulls one experiment at a time from the dispatcher
-                           and stops only when the campaign drains, so a slow
-                           grid point can no longer leave other workers idle
-                           at a round barrier.
+                           and stops when the campaign drains.
 
 `instance_id` feeds `Config.program_id` so artifacts from parallel workers
 don't collide under a shared `runs/`. The Reporter persists each run; here we
@@ -20,16 +18,17 @@ import contextlib
 import dataclasses
 import io
 import json
+import os
 import time
 import typing
-import urllib.error
 import urllib.request
 from functools import partial
 from http import HTTPStatus
 from http.client import HTTPException
 from typing import Callable, Iterable, TypeVar
 
-from pipeline import Config, run_pipeline
+from pipeline.config import Config
+from pipeline.run import run_pipeline
 from pipeline.store import ClaimedExperiment
 from pipeline.timing import Timer
 from pipeline.types import Report, Seed, VerdictCategory
@@ -46,6 +45,20 @@ _BACKOFF_MAX_S = 30.0
 _T = TypeVar("_T")
 
 
+@dataclasses.dataclass(frozen=True)
+class Worker:
+  """What the launcher tells a worker, through its environment."""
+  instance_id: int
+  dispatcher: str | None
+
+  @classmethod
+  def from_env(cls) -> "Worker":
+    return cls(
+      instance_id=int(os.environ.get("INSTANCE_ID", 0)),
+      dispatcher=os.environ.get("DISPATCHER"),
+    )
+
+
 def _empty_counts() -> dict[str, int]:
   counts = {c: 0 for c in typing.get_args(VerdictCategory)}
   counts["error"] = 0
@@ -53,7 +66,7 @@ def _empty_counts() -> dict[str, int]:
 
 
 @dataclasses.dataclass
-class _Tally:
+class Tally:
   """Running verdict counts for one instance, printed once at the end."""
   counts: dict[str, int] = dataclasses.field(default_factory=_empty_counts)
   bug_seeds: list[int] = dataclasses.field(default_factory=list)
@@ -85,7 +98,7 @@ def _run_with_retry(config: Config) -> tuple[Report, int]:
   return report, total_ms
 
 
-def _run_one(config: Config, tally: _Tally) -> Report | None:
+def _run_one(config: Config, tally: Tally) -> Report | None:
   """One case: run it, tally it, print its line. None means it raised."""
   seed = config.seed.value
   sink = io.StringIO()
@@ -94,12 +107,12 @@ def _run_one(config: Config, tally: _Tally) -> Report | None:
       report, elapsed_ms = _run_with_retry(config)
   except Exception as exc:
     tally.record_error()
-    print(f"[i{config.instance_id:02d} seed={seed:04d}] ERROR — {exc!s}")
+    print(f"[i{config.instance_id:02d} seed={seed:04d}] ERROR: {exc!s}")
     return None
   tally.record(seed, report, elapsed_ms)
   print(
     f"[i{config.instance_id:02d} seed={seed:04d}] "
-    f"{report.verdict.category} — {report.verdict.reason} "
+    f"{report.verdict.category}: {report.verdict.reason} "
     f"({elapsed_ms} ms)")
   return report
 
@@ -110,7 +123,7 @@ def run_instance(
   instance_id: int = 0,
 ) -> None:
   seeds = list(seeds)
-  tally = _Tally()
+  tally = Tally()
 
   for seed in seeds:
     config = dataclasses.replace(
@@ -126,7 +139,7 @@ def run_dispatcher_instance(
   instance_id: int = 0,
 ) -> None:
   """Pull, run, report; until the dispatcher says the campaign is drained."""
-  tally = _Tally()
+  tally = Tally()
   n_runs = 0
   print(f"[i{instance_id:02d}] pulling work from {dispatcher}")
 
@@ -151,7 +164,7 @@ def _config_for(
   claimed: ClaimedExperiment,
   instance_id: int,
 ) -> Config:
-  """Each item carries its own grid point, so the Config is per-run now."""
+  """Each item carries its own grid point, so the Config is per-run."""
   item = claimed.config
   return dataclasses.replace(
     base,
@@ -211,7 +224,7 @@ def _send_result(dispatcher: str, experiment_id: int, report: Report) -> None:
     pass
 
 
-def _print_summary(instance_id: int, n_runs: int, tally: _Tally) -> None:
+def _print_summary(instance_id: int, n_runs: int, tally: Tally) -> None:
   print()
   print(f"=== instance {instance_id:02d} summary ({n_runs} runs) ===")
   for category, count in tally.counts.items():

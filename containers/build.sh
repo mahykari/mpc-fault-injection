@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build MP-SPDZ artifacts with podman, reusing layer caching across re-runs.
+# Build the project's images and binaries with podman, reusing layer caching across re-runs.
 #
 #   ./containers/build.sh             # base patches → binaries into MP-SPDZ/bin/Linux-amd64-patched/
 #   ./containers/build.sh seeded-bug  # base + seeded-bug overlay → Linux-amd64-patched-seeded-bug/
@@ -27,7 +27,7 @@ ALL_PROTOCOLS="mascot-party.x spdz2k-party.x malicious-shamir-party.x"
 make_targets() { local t=""; for b in $1; do t="$t static/$b"; done; echo "$t"; }
 
 if [ "$VARIANT" = "dispatch" ]; then
-  IMAGE_TAG="mpspdz-dispatch:v0.4.2"
+  IMAGE_TAG="fuzz-dispatch"
   echo "==> Building $IMAGE_TAG (dispatcher only: no MP-SPDZ, no uv)"
   podman build \
     --file "containers/Containerfile.dispatch" \
