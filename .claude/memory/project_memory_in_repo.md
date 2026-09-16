@@ -1,6 +1,6 @@
 ---
 name: project_memory_in_repo
-description: "Project memory lives in the repo at .claude/memory/, symlinked from ~/.claude by link-memory.sh; run once per machine"
+description: "Project memory lives in the repo at .claude/memory/, symlinked from ~/.claude by link-memory.sh; run once per worktree"
 metadata: 
   node_type: memory
   type: project
@@ -10,7 +10,7 @@ metadata:
 
 Set up 2026-08-06. Memory is **tracked in the repo** at `.claude/memory/`. The harness derives its memory path from the cwd (`~/.claude/projects/<abs-path-with-slashes-as-dashes>/memory`), so every machine and worktree gets a different slug and would otherwise start empty.
 
-`.claude/scripts/link-memory.sh` symlinks that slug path at the **main worktree's** `.claude/memory` (resolved via `git rev-parse --git-common-dir`, so a branch checkout doesn't fork the memory). Idempotent; **run it once per machine**. It moves any existing real dir to `memory.bak`.
+`.claude/scripts/link-memory.sh` symlinks that slug path at the **cwd worktree's own** `.claude/memory` (resolved via `git rev-parse --show-toplevel`, since 2026-09-16; before that it linked the main worktree's copy, so branches saw master's memory and their own tracked copy went stale). Idempotent; **run it once per worktree**. It moves any existing real dir to `memory.bak`.
 
 Consequences:
 - Memories are ordinary tracked files. They sync by `git pull` / `git push`; conflicts land in `MEMORY.md` and merge like anything else. Both machines commit their own.

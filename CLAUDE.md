@@ -97,9 +97,9 @@ Invariants: `uv run python main.py` always works, `uv run mypy` always green. Se
 Project memory lives in the repo at `.claude/memory/`, not in `~/.claude`. The
 harness derives its memory path from the cwd, so each machine and worktree gets
 a different slug; `.claude/scripts/link-memory.sh` symlinks that path at the
-main worktree's `.claude/memory`. **Run it once per machine.** After that,
-memories are ordinary tracked files: they move by `git pull` / `git push`, and
-conflicts show up in `MEMORY.md` like any other merge.
+cwd worktree's own `.claude/memory`. **Run it once per worktree.** After that,
+memories are ordinary tracked files: they move by `git pull` / `git push` /
+`git merge`, and conflicts show up in `MEMORY.md` like any other merge.
 
 **mercury is a peer clone, not a deploy target.** It has its own checkout and
 its own GitHub key. There is no rsync, no remote invoke, no deploy script; ssh

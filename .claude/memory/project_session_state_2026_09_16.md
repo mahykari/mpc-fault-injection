@@ -41,8 +41,7 @@ touches those too. Refactor first, merge across it once.
 planner's `--rng-seed` (per-point corrupt set and depth), and the last soup hop
 `ExperimentConfig` into `Config` via `dataclasses.replace`.
 
-**Gotcha found:** `.claude/scripts/link-memory.sh` only links the MAIN
-worktree's slug, so sessions in other worktrees (matrix-rewrites had none) run
-without repo memory. `-home-mkarimi-claude-md` was linked by hand on
-2026-09-16; do the same for the refactor worktree, or fix the script to link
-the cwd worktree's slug too.
+**Gotcha, fixed 2026-09-16:** `link-memory.sh` used to link only the MAIN
+worktree's slug, so other worktrees (matrix-rewrites) ran without repo memory.
+It now links the cwd worktree's slug to that worktree's own `.claude/memory`.
+Run it once in every new worktree, including the refactor one.
