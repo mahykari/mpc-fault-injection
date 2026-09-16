@@ -29,7 +29,7 @@
 - [more-protocols (implemented)](project_more_protocols_plan.md) — ProtocolSpec table for spdz2k + malicious-shamir done in worktree; pending `./containers/build.sh patched` + smoke test
 - [Containerization rationale](project_containerization_rationale.md) — podman-per-instance = parallel fuzzers, minimal interference (not just the singleton race); landed on master
 - [First campaign baseline](project_first_campaign_baseline.md) — 50k stock-MASCOT run: bug=0, 82% caught / 18% inert; baseline for seeded-bug comparison
-- [Open threads](project_open_threads.md) — pick up here: unpushed commits + open PR #3, Semi dry-run, reporter verdict persistence, retry-on-timeout, seeded-bug run
+- [Open threads](project_open_threads.md) — pointer only: the backlog is `BACKLOG.md` at the repo root since 2026-09-08
 - [Seeded-bug campaign prep](project_seeded_bug_campaign_prep.md) — 8-combo Check() toggling campaign; fix reporter, write SQLite aggregator, then run
 - [Session 2026-06-29](project_session_2026_06_29.md) — retry, semi-rerun, protocols worktrees + 80k campaign; merge branches + smoke-test next
 - [Seeded-bug campaign result](project_seeded_bug_campaign_result.md) — 80k run done on mercury; bugs only when subprocessor_check+beaver_check both off
@@ -40,8 +40,8 @@
 - [Simple commands](feedback_simple_commands.md) — no wizard one-liners; one simple command at a time, or explain it first
 - [Session state 2026-07-09](project_session_state_2026_07_09.md) — 2M campaign running on mercury; reaping fix landed; server underloaded, next = more instances / drop round barrier
 - [Session state 2026-07-13](project_session_state_2026_07_13.md) — campaign stopped at 21k; 66% caught / 20% honest_invalid / 14% inert / 0 bug; honest_invalid = mascot+spdz2k at n=9 (cause found 2026-08-10, see n=9 PID limit)
-- [Dispatcher pull model](project_dispatcher_pull_model.md) — round barrier replaced by HTTP dispatcher + long-lived pull workers; store.py is queue and results in one
-- [Next: in-memory queue](project_next_task_in_memory_queue.md) — dispatcher pinned at 100% CPU; replace the per-request DB scan with a deque + lease heap
+- [Dispatcher pull model](project_dispatcher_pull_model.md) — HTTP dispatcher (`pipeline/dispatch.py`) + pull workers; one launcher; merged to master 2026-09-16 as fa4651a
+- [Next: in-memory queue](project_next_task_in_memory_queue.md) — dispatcher pinned at 100% CPU; deque + lease heap, now part of the store.py rewrite in the refactor
 - [Memory lives in the repo](project_memory_in_repo.md) — .claude/memory/ tracked + symlinked by link-memory.sh; run once per machine; repo is public
 - [Drop it means drop it](feedback_drop_it_means_drop_it.md) — when a mechanism is no longer needed, delete it; no renamed or reduced survivor
 - [Campaign disk blowup 2026-08-06](project_campaign_disk_blowup.md) — 2M-run campaign died at 15% on a full disk; MP-SPDZ Memory-p-P dumps = 1.1T; 82% caught / 18% inert / 0 bug at 305k
@@ -50,3 +50,7 @@
 - [Campaign launch gotchas](project_campaign_launch_gotchas.md) — `--runs` is per grid point, not total; a new campaign reattaches to the old campaign.db unless you archive it
 - [Settings reload split](reference_settings_reload.md) — allow/deny apply live mid-session, defaultMode only at session start
 - [circil submodule + Matrix template](project_circil_submodule_matrix_template.md) — value-parameterized Matrix needs a circil patch; submodule first
+- [Session state 2026-09-16](project_session_state_2026_09_16.md) — PR #6 merged; claude-md worktree; next: CLAUDE.md branch, big refactor on master, then matrix-rewrites merge
+- [Matryoshka configs](project_matryoshka_configs.md) — nested dolls by owner (GridPoint, Experiment, Toolchain, Assignment); one coin = experiment seed; land one doll per merge
+- [Names must say what](feedback_names_must_say_what.md) — Cell/Site/Run vetoed; a name must evoke the thing to a stranger; re-check Serve/Launch/Worker
+- [Bel canto for design](feedback_bel_canto_for_design.md) — spell out design rationale in the refactor; "What is X?" in review = discard; no cheap tricks (image-time init blanking, sys.path, Namespace passing)

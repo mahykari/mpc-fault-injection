@@ -38,6 +38,8 @@ process, regenerable queue, durability already in sqlite. See
 Campaign was left running on mercury overnight; this throttles visibility
 (`/status` starves), not results.
 
-Still unimplemented as of 2026-09-07: `store.py` has no deque/heap and still
-carries `_sweep_if_due`/`_abandon_exhausted`. PR #6 (dispatcher-pull-model →
-master) was opened without it; fixes deferred to later per Mahyar.
+Still unimplemented as of 2026-09-16; PR #6 merged without it. Now scheduled
+as one piece of the `store.py` rewrite in the master refactor: SQLAlchemy Core
+(Mahyar, on string SQL: "you're really slow in the parts that count") plus this
+queue, with the schema mirroring the dolls in [[project_matryoshka_configs]].
+Tracked in `BACKLOG.md`.

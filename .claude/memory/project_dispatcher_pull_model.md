@@ -17,9 +17,15 @@ Round barrier is gone (was the cause of 21k runs in 4 days, see
   yet, so there is no separate queue medium. `corrupt_set` is the one serialised
   container (sorted comma-separated string) — Mahyar's explicit call, accepting
   that "which |S| produces bugs" becomes a LIKE instead of a GROUP BY.
-- **`containers/dispatch.py`** — single-threaded `HTTPServer`, sole sqlite
-  writer. `GET /next` (204 = drained, makes workers exit), `POST /result`,
-  `GET /status`. Own image, `mpspdz-dispatch:v0.4.2`, python:3.12-slim.
+- **`pipeline/dispatch.py`** (was `containers/dispatch.py` until `70c42dc`),
+  run as `python -m pipeline.dispatch` — single-threaded `HTTPServer`, sole
+  sqlite writer. `GET /next` (204 = drained, makes workers exit),
+  `POST /result` (200 + counts), `GET /status`. Own image `fuzz-dispatch`,
+  python:3.12-slim plus the pipeline package; `pipeline/__init__.py` is empty
+  and `run_pipeline` lives in `pipeline/run.py` so the import stays leaf-only.
+- **`containers/launch.py`** — the one launcher: network, dispatcher, workers.
+  Parses only podman knobs and forwards every unknown flag to the dispatcher.
+  `continuous.py` is gone.
 - **`pipeline/campaign.py`** — grid expansion + seed allocation. Deliberately
   NOT in Store: Mahyar's correction that Store is a data-interaction interface,
   not a planner.
@@ -32,12 +38,9 @@ retire as verdict `abandoned` once their lease expires.
 Old `runs` table + `main.py aggregate` deliberately untouched; delete once this
 proves out.
 
-Landed on branch `dispatcher-pull-model` (pushed): `e077b45` the model itself,
-`b032197` rate-limits the abandon sweep (it ran per-claim and pinned the
-dispatcher at 97% CPU against 2M rows, starving `/status`), `020c776` fixes the
-deploy ssh hang (`&` binds looser than `&&`, so the whole list backgrounded into
-a subshell that held ssh's stdout). Permissions allowlist went to master
-separately as `a8ef555`, unpushed as of 2026-07-30.
+Merged to master 2026-09-16 as `fa4651a` (PR #6). The store rewrite
+([[project_next_task_in_memory_queue]]) was left out and goes with the
+matryoshka refactor ([[project_matryoshka_configs]]).
 
 Deployed and running on mercury 2026-07-30. First campaign hit ~10 runs/sec
 across 16 workers, vs 21k runs in 4 days under the round barrier.
