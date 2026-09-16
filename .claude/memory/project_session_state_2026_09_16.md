@@ -18,6 +18,12 @@ metadata:
 **Plan, in order (Mahyar's, 2026-09-16).**
 1. CLAUDE.md branch: loosen the terseness rules that produce tangled code, add
    the design rules the review established. See [[feedback_bel_canto_for_design]].
+   Also drop teaching mode and the contractor machinery ("I'm mostly in
+   contractor mode"): the CLAUDE.md "Teaching mode" section,
+   `.claude/agents/contractor.md`, hooks `contractor-start.sh`,
+   `contractor-stop.sh`, `edit-gate.sh` (guess.md gate), command
+   `new-problem.md` + `scripts/new-problem.sh`, and their entries in
+   `.claude/settings.json`. Keep librarian, notify, turn-start, mpc-explore.
 2. Big refactor on master, deadline "a fraction of a month" (a report to his
    boss). Purpose is also for him to learn the architecture all the way down
    and interfere in its design: walk module by module, he decides keep/kill/
