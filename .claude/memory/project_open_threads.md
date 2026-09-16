@@ -5,11 +5,15 @@ metadata:
   node_type: memory
   type: project
   originSessionId: a26058fb-6cc7-452a-8afa-8b21c7479a2f
+  modified: 2026-09-07T13:02:19.572Z
 ---
 
 State as of 2026-06-17 EOD (first full 50k MASCOT campaign done, see [[project_first_campaign_baseline]]):
 
 **Git/deploy (user does pushes/PRs manually — [[feedback_user_drives_button]]):**
+- Update 2026-09-07: PR #3 is closed; no open PRs remained until PR #6
+  (dispatcher-pull-model → master) was opened, at Mahyar's ask, for later review.
+  The in-memory queue ([[project_next_task_in_memory_queue]]) is NOT in it.
 - master has 2 local **unpushed** commits: per-run wall timing, and the Containerfile COPY-circil flip (build needs no GitHub key).
 - PR #3 (worktree-parallel-runs) still **open** on GitHub — merged locally, not closed.
 - Deployed + running on mercury at `~/mpc-fault-injection` (rsync `-az`, excludes .venv/MP-SPDZ/runs/.git/.claude). mercury = 94c/192t, 1.5TB; box is effectively the user's alone.

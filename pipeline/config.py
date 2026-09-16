@@ -11,10 +11,10 @@ documents the per-component slice.
 """
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol as View
+from random import Random
+from typing import Protocol as View
 
 from pipeline.protocols import PROTOCOL_SPECS, ProtocolSpec
 from pipeline.types import Protocol, Seed
@@ -50,6 +50,17 @@ class Config:
   @property
   def spec(self) -> ProtocolSpec:
     return PROTOCOL_SPECS[self.protocol]
+
+  @property
+  def program_rng(self) -> Random:
+    return self._stream("program")
+
+  @property
+  def gadget_rng(self) -> Random:
+    return self._stream("gadgets")
+
+  def _stream(self, purpose: str) -> Random:
+    return Random(f"{self.seed.value}:{purpose}")
 
   @property
   def program_id(self) -> str:
@@ -94,33 +105,16 @@ class Config:
     return self.run_dir / "report.json"
 
 
-# Program-derived (paths) or per-run (seed); not user-tunable.
-_PROTECTED_FIELDS = frozenset({"mpspdz_root", "runs_root", "seed"})
-
-
-def apply_overrides(defaults: Config, overrides: dict[str, Any]) -> Config:
-  """Overlay a partial dict of Config-field overrides onto `defaults`.
-
-  Keys absent keep their default; protected and unknown keys raise rather
-  than pass silently. Campaign-level keys (`seeds`, `instance_id`) are the
-  caller's to strip before this — they aren't Config fields.
-  """
-  field_names = {f.name for f in dataclasses.fields(Config)}
-  for key in overrides:
-    if key in _PROTECTED_FIELDS:
-      raise ValueError(f"config key {key!r} is program-controlled, not overridable")
-    if key not in field_names:
-      raise ValueError(f"unknown config key {key!r}")
-  return dataclasses.replace(defaults, **overrides)
-
-
 class NeedsGenerator(View):
   @property
   def seed(self) -> Seed: ...
   @property
+  def program_rng(self) -> Random: ...
+  @property
   def expression_depth(self) -> int: ...
   @property
   def let_probability(self) -> float: ...
+
 
 class NeedsInjector(View):
   @property
@@ -128,7 +122,7 @@ class NeedsInjector(View):
   @property
   def malicious_parties(self) -> list[int]: ...
   @property
-  def seed(self) -> Seed: ...
+  def gadget_rng(self) -> Random: ...
 
 
 class NeedsCompilerToolkit(View):

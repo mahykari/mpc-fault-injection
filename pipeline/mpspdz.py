@@ -91,6 +91,14 @@ class MpSpdzCompilerToolkit:
     return MpCompiler
 
 
+# MP-SPDZ dumps its whole memory to `Player-Data/Memory-<type>-P<i>` at the end
+# of every run so the next run can resume from it (Processor/Machine.hpp:647).
+# We never resume, and at ~836K per party per twin it dwarfed everything else
+# the pipeline writes. `-o` takes a comma-separated free-form option list;
+# unknown entries are collected and ignored, so this is safe across protocols.
+_SUPPRESS_MEMORY_DUMP = ["-o", "no_memory_output"]
+
+
 class MpSpdzPartyBinary:
   """One MP-SPDZ party binary (e.g. `mascot-party.x`).
 
@@ -165,6 +173,7 @@ class MpSpdzPartyBinary:
       "-N", str(n_parties),
       *spec.domain.runtime_args,
       *spec.threshold_args(n_parties),
+      *_SUPPRESS_MEMORY_DUMP,
       "-h", "localhost",
       "-pn", str(port),
       self._config.program_id,

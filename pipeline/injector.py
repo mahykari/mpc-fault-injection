@@ -6,7 +6,7 @@ gadgets per program is the default — `k` distinct anchors sampled
 without replacement.
 
 Adding a new gadget kind: add a file under `pipeline/gadgets/` and
-register the template in the tuple in `pipeline/__init__.py`.
+register the template in the tuple in `pipeline/run.py`.
 
 Compiling twice (once for honest, once for mutated) is the simple
 substrate: MP-SPDZ's `Compiler.program.Program` resists deep-copy
@@ -16,7 +16,6 @@ let the toolkit do two compiles from the same source and mutate one.
 from __future__ import annotations
 
 import difflib
-from random import Random
 from typing import Any
 
 from pipeline.config import NeedsInjector
@@ -48,7 +47,7 @@ class Injector:
     self, source: MpspdzSource, honest: MpspdzProgram,
   ) -> MutatedProgram:
     mutated = self._toolkit.compile(self._config.program_id, source.source)
-    rng = Random(self._config.seed.value)
+    rng = self._config.gadget_rng
     tape = mutated.tapes[TAPE_INDEX]
     anchors = find_secret_writers(tape)
     if not anchors:

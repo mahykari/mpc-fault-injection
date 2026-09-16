@@ -1,128 +1,145 @@
-"""Launch N fuzz-pipeline containers concurrently against a shared runs/.
+"""Campaign launcher: one dispatcher, N pull workers, no rounds.
 
-Build the image first:  ./containers/build.sh pipeline
+Everything runs in podman containers on one named podman network. Each
+container has its own network namespace, so `dispatcher` resolves as a
+hostname only because both sides sit on that network: creating the network
+makes the name resolvable, starting a container "on it" attaches the
+container. The same isolation keeps the workers' MP-SPDZ party ports from
+colliding. runs/ is mounted into every container, so the dispatcher's sqlite
+file and the workers' run dirs land on the host.
 
-Each instance gets a disjoint, reproducible slice of seeds (sampled under
---seed). We write one JSON run spec per instance — its seeds, its instance_id,
-plus any tunables from --config — and mount it as the container's only input;
-the container reads it via CONFIG. Containers keep their own network namespace
-(default bridge), so the party port probe can't collide; only runs/ is shared.
+Campaign shape (--runs, --protocols, --party-counts, ...) is not parsed here:
+every flag this script does not know is forwarded to the dispatcher, which
+owns it. Workers back off and retry while the dispatcher boots, so nothing
+sleeps. When the campaign drains the dispatcher answers 204, every worker
+exits, and the dispatcher is stopped.
+
+  ./containers/build.sh pipeline
+  ./containers/build.sh dispatch
+  python3 containers/launch.py --memory 4g --runs 5000
 """
 from __future__ import annotations
 
 import argparse
-import json
-import random
 import subprocess
-import tempfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-RUNS_DIR = REPO_ROOT / "runs"
-DEFAULT_IMAGE = "mpspdz-pipeline:v0.4.2"
-CONFIG_MOUNT = "/app/config.json"
-MAX_DEPTH = 40
-
-
-def parse_args() -> argparse.Namespace:
-  p = argparse.ArgumentParser(description=__doc__)
-  p.add_argument("--instances", type=int, help="ignored when --plan is given")
-  p.add_argument("--runs", type=int, default=50, help="seeds per instance")
-  p.add_argument("--seed", type=int, default=0, help="seeds the seed sampling")
-  p.add_argument("--pool", type=int, default=100_000, help="seed space to sample from")
-  p.add_argument("--image", default=DEFAULT_IMAGE)
-  p.add_argument("--cpus", help="podman --cpus per instance, e.g. 2")
-  p.add_argument("--memory", help="podman --memory per instance, e.g. 4g")
-  p.add_argument("--config", help="JSON of tunables, merged into every instance's spec")
-  p.add_argument("--disabled-sites", help="comma-separated site IDs to disable MAC staging")
-  p.add_argument("--plan", help="JSON file: list of per-instance specs "
-                 "{instance_id, seeds, combo, expression_depth}")
-  return p.parse_args()
+RUNS_DIR = Path(__file__).resolve().parent.parent / "runs"
+CONTAINER_RUNS_DIR = "/app/runs"
+DISPATCH_NAME = "dispatcher"
+DISPATCH_PORT = 8080
+DISPATCHER_URL = f"http://{DISPATCH_NAME}:{DISPATCH_PORT}"
+# A party spawns ~230 threads, so a 9-party run needs ~2050 and podman's 2048
+# default denies the last few. MP-SPDZ does not fail on that, it deadlocks:
+# peers sit in accept() for a party whose connection thread was never created.
+PIDS_UNLIMITED = "0"
 
 
-def seed_slices(instances: int, runs: int, pool: int, seed: int) -> list[list[int]]:
-  total = instances * runs
-  if total > pool:
-    raise SystemExit(f"need {total} distinct seeds but pool is {pool}; raise --pool")
-  chosen = random.Random(seed).sample(range(pool), total)
-  return [chosen[i * runs:(i + 1) * runs] for i in range(instances)]
+@dataclass(frozen=True)
+class Launch:
+  """Everything the launcher owns: podman knobs plus the forwarded campaign flags."""
+  workers: int
+  worker_image: str
+  dispatch_image: str
+  network: str
+  status_port: int
+  cpus: str | None
+  memory: str | None
+  campaign: list[str]
+
+  @classmethod
+  def from_argv(cls, argv: list[str] | None = None) -> "Launch":
+    p = argparse.ArgumentParser(
+      description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--workers", type=int, default=16, help="worker containers to start")
+    p.add_argument("--worker-image", default="mpspdz-pipeline:v0.4.2")
+    p.add_argument("--dispatch-image", default="fuzz-dispatch")
+    p.add_argument("--network", default="fuzz-net",
+                   help="podman network shared by every container")
+    p.add_argument("--status-port", type=int, default=DISPATCH_PORT,
+                   help="host port for curl localhost:PORT/status")
+    p.add_argument("--cpus", help="podman --cpus per worker, e.g. 2")
+    p.add_argument("--memory", help="podman --memory per worker, e.g. 4g")
+    known, campaign = p.parse_known_args(argv)
+    return cls(
+      workers=known.workers,
+      worker_image=known.worker_image,
+      dispatch_image=known.dispatch_image,
+      network=known.network,
+      status_port=known.status_port,
+      cpus=known.cpus,
+      memory=known.memory,
+      campaign=campaign,
+    )
+
+  @property
+  def worker_resources(self) -> list[str]:
+    opts = ["--pids-limit", PIDS_UNLIMITED]
+    if self.cpus is not None:
+      opts += ["--cpus", self.cpus]
+    if self.memory is not None:
+      opts += ["--memory", self.memory]
+    return opts
+
+  @property
+  def runs_mount(self) -> str:
+    return f"{RUNS_DIR}:{CONTAINER_RUNS_DIR}"
 
 
-def instance_depths(instances: int, seed: int) -> list[int]:
-  rng = random.Random(seed)
-  return [rng.randint(1, MAX_DEPTH) for _ in range(instances)]
+def ensure_network(name: str) -> None:
+  if subprocess.run(["podman", "network", "exists", name]).returncode == 0:
+    return
+  subprocess.run(["podman", "network", "create", name], check=True)
 
 
-def spawn(
-  instance_id: int,
-  config: Path,
-  image: str,
-  cpus: str | None = None,
-  memory: str | None = None,
-  disabled_sites: str | None = None,
-) -> "subprocess.Popen[bytes]":
-  opts = []
-  if cpus is not None:
-    opts += ["--cpus", cpus]
-  if memory is not None:
-    opts += ["--memory", memory]
-  env_opts = ["-e", f"CONFIG={CONFIG_MOUNT}"]
-  if disabled_sites:
-    env_opts += ["-e", f"MPSPDZ_DISABLED_SITES={disabled_sites}"]
+def spawn_dispatcher(launch: Launch) -> "subprocess.Popen[bytes]":
+  # Not detached: its stdout joins the campaign log.
   return subprocess.Popen([
     "podman", "run", "--rm",
-    "--name", f"fuzz-i{instance_id:02d}",
-    *opts,
-    "-v", f"{config}:{CONFIG_MOUNT}:ro",
-    *env_opts,
-    "-v", f"{RUNS_DIR}:/app/runs",
-    image,
+    "--name", DISPATCH_NAME,
+    "--network", launch.network,
+    "-p", f"{launch.status_port}:{DISPATCH_PORT}",
+    "-v", launch.runs_mount,
+    launch.dispatch_image,
+    "--db", f"{CONTAINER_RUNS_DIR}/campaign.db",
+    "--port", str(DISPATCH_PORT),
+    *launch.campaign,
   ])
 
 
-def default_instances(args: argparse.Namespace) -> list[dict[str, Any]]:
-  if args.instances is None:
-    raise SystemExit("need --instances (or --plan)")
-  slices = seed_slices(args.instances, args.runs, args.pool, args.seed)
-  depths = instance_depths(args.instances, args.seed)
-  combo = args.disabled_sites or "baseline"
-  return [
-    {"instance_id": i, "seeds": s, "combo": combo, "expression_depth": depths[i]}
-    for i, s in enumerate(slices)
-  ]
+def spawn_worker(launch: Launch, worker_id: int) -> "subprocess.Popen[bytes]":
+  return subprocess.Popen([
+    "podman", "run", "--rm",
+    "--name", f"fuzz-w{worker_id:02d}",
+    "--network", launch.network,
+    *launch.worker_resources,
+    "-e", f"INSTANCE_ID={worker_id}",
+    "-e", f"DISPATCHER={DISPATCHER_URL}",
+    "-v", launch.runs_mount,
+    launch.worker_image,
+  ])
 
 
-def env_sites(combo: str) -> str | None:
-  return None if combo in ("", "baseline") else combo
-
-
-def main() -> None:
-  args = parse_args()
+def main(launch: Launch) -> None:
   RUNS_DIR.mkdir(exist_ok=True)
-  tunables: dict[str, Any] = json.loads(Path(args.config).read_text()) if args.config else {}
-  instances: list[dict[str, Any]] = (
-    json.loads(Path(args.plan).read_text()) if args.plan else default_instances(args))
+  ensure_network(launch.network)
 
-  specs_dir = Path(tempfile.mkdtemp(prefix="fuzz-specs-"))
-  procs = []
-  for inst in instances:
-    iid = inst["instance_id"]
-    spec = {**tunables, **inst}
-    spec_path = specs_dir / f"i{iid:02d}.json"
-    spec_path.write_text(json.dumps(spec))
-    procs.append(spawn(
-      iid, spec_path, args.image, args.cpus, args.memory,
-      env_sites(inst.get("combo", "baseline"))))
-  codes = [(inst["instance_id"], p.wait()) for inst, p in zip(instances, procs)]
+  print(f"=== dispatcher {launch.dispatch_image} on {launch.network} ===", flush=True)
+  dispatcher = spawn_dispatcher(launch)
 
+  print(f"=== {launch.workers} workers pulling from {DISPATCHER_URL} ===", flush=True)
+  workers = [spawn_worker(launch, worker_id) for worker_id in range(launch.workers)]
+
+  codes = [(worker_id, p.wait()) for worker_id, p in enumerate(workers)]
   print()
-  print("=== launch summary ===")
-  for instance_id, code in codes:
-    print(f"  instance {instance_id:02d}: exit {code}")
-  if any(code != 0 for _, code in codes):
-    raise SystemExit(1)
+  print("=== campaign drained ===")
+  for worker_id, code in codes:
+    print(f"  worker {worker_id:02d}: exit {code}")
+
+  subprocess.run(["podman", "stop", DISPATCH_NAME])
+  dispatcher.wait()
 
 
 if __name__ == "__main__":
-  main()
+  main(Launch.from_argv())

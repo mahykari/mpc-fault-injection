@@ -16,5 +16,8 @@ Consequences:
 - Memories are ordinary tracked files. They sync by `git pull` / `git push`; conflicts land in `MEMORY.md` and merge like anything else. Both machines commit their own.
 - **The repo is public**, so everything here is world-readable. The user accepted this knowingly. Don't write anything into memory you wouldn't publish.
 - `.claude/contractor`, `.claude/guess.md`, `memory.bak/` are gitignored local-only state.
+- **Memory is branch-dependent.** Check out a branch older than the merge that introduced `.claude/memory/` and the symlink target goes empty. Merge master into a branch before working on it.
+
+mercury was linked 2026-08-06: its `~/mpc-fault-injection` was converted from an rsync copy in place (`git init`, `remote add`, `fetch`, `reset origin/<branch>`), and it has a GitHub deploy key with write access.
 
 This is what made [[project_mercury_deploy]] rsync-free.

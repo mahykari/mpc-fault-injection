@@ -1,0 +1,8 @@
+# Dispatcher image: python plus the pipeline package, no MP-SPDZ.
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY pipeline/ /app/pipeline/
+
+EXPOSE 8080
+ENTRYPOINT ["python", "-m", "pipeline.dispatch"]
